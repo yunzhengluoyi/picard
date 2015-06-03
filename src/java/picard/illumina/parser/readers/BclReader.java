@@ -72,14 +72,14 @@ import java.util.zip.GZIPInputStream;
  * <p/>
  * So the output base/quality will be a (T/34)
  */
-public class BclReader implements CloseableIterator<BclData> {
+public class BclReader extends AbstractIlluminaFileReader implements CloseableIterator<BclData> {
     private static final byte BASE_MASK = 0x0003;
     private static final int HEADER_SIZE = 4;
     private static final byte[] BASE_LOOKUP = new byte[]{'A', 'C', 'G', 'T'};
 
     private final InputStream[] streams;
     private final int[] outputLengths;
-    int[] numClustersPerCycle;
+    long[] numClustersPerCycle;
 
     private final BclQualityEvaluationStrategy bclQualityEvaluationStrategy;
     private BclData queue = null;
@@ -95,7 +95,7 @@ public class BclReader implements CloseableIterator<BclData> {
                 cycles += outputLength;
             }
             this.streams = new InputStream[cycles];
-            this.numClustersPerCycle = new int[cycles];
+            this.numClustersPerCycle = new long[cycles];
 
             final ByteBuffer byteBuffer = ByteBuffer.allocate(HEADER_SIZE);
             byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
@@ -174,7 +174,7 @@ public class BclReader implements CloseableIterator<BclData> {
 
             this.outputLengths = new int[]{1};
             this.streams = new InputStream[1];
-            this.numClustersPerCycle = new int[]{1};
+            this.numClustersPerCycle = new long[]{1};
             this.bclQualityEvaluationStrategy = bclQualityEvaluationStrategy;
 
             final ByteBuffer byteBuffer = ByteBuffer.allocate(HEADER_SIZE);
@@ -199,7 +199,7 @@ public class BclReader implements CloseableIterator<BclData> {
         }
     }
 
-    void assertProperFileStructure(final File file, final int numClusters, final InputStream stream) {
+    void assertProperFileStructure(final File file, final long numClusters, final InputStream stream) {
         final long elementsInFile = file.length() - HEADER_SIZE;
         if (numClusters != elementsInFile) {
             CloserUtil.close(stream);
@@ -253,7 +253,7 @@ public class BclReader implements CloseableIterator<BclData> {
         return queue != null;
     }
 
-    private long getNumClusters() {
+    public Long getNumClusters() {
         return numClustersPerCycle[0];
     }
 

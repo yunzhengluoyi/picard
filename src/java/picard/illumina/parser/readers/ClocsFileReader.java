@@ -154,4 +154,9 @@ public class ClocsFileReader extends AbstractIlluminaPositionFileReader {
 
     public void close() {
     }
+
+    @Override
+    public Long getNumClusters() {
+        return null;
+    }
 }

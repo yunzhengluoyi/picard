@@ -8,18 +8,24 @@ import picard.PicardException;
 import picard.cmdline.CommandLineProgram;
 import picard.cmdline.CommandLineProgramProperties;
 import picard.cmdline.Option;
-import picard.cmdline.programgroups.Illumina;
 import picard.cmdline.StandardOptionDefinitions;
+import picard.cmdline.programgroups.Illumina;
+import picard.illumina.parser.CycleIlluminaFileMap;
 import picard.illumina.parser.IlluminaDataProviderFactory;
 import picard.illumina.parser.IlluminaDataType;
+import picard.illumina.parser.IlluminaFileMap;
 import picard.illumina.parser.IlluminaFileUtil;
 import picard.illumina.parser.OutputMapping;
 import picard.illumina.parser.ParameterizedFileUtil;
+import picard.illumina.parser.PerTilePerCycleFileUtil;
 import picard.illumina.parser.ReadStructure;
+import picard.illumina.parser.readers.BclQualityEvaluationStrategy;
+import picard.illumina.parser.readers.BclReader;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -72,6 +78,9 @@ public class CheckIlluminaDirectory extends CommandLineProgram {
             optional = true)
     public Boolean LINK_LOCS = false;
 
+    @Option(doc = "A flag to determine if a full check of all files should be done.")
+    public Boolean FULL_TEST = false;
+
     /**
      * Required main method implementation.
      */
@@ -111,7 +120,7 @@ public class CheckIlluminaDirectory extends CommandLineProgram {
             log.info("Checking lane " + lane);
             log.info("Expected tiles: " + StringUtil.join(", ", expectedTiles));
 
-            final int numFailures = verifyLane(fileUtil, expectedTiles, expectedCycles, DATA_TYPES, FAKE_FILES);
+            final int numFailures = verifyLane(fileUtil, expectedTiles, expectedCycles, DATA_TYPES, FAKE_FILES, FULL_TEST);
 
             if (numFailures > 0) {
                 log.info("Lane " + lane + " FAILED " + " Total Errors: " + numFailures);
@@ -175,7 +184,9 @@ public class CheckIlluminaDirectory extends CommandLineProgram {
      */
     private static final int verifyLane(final IlluminaFileUtil fileUtil, final List<Integer> expectedTiles,
                                         final int[] cycles,
-                                        final Set<IlluminaDataType> dataTypes, final boolean fakeFiles) {
+                                        final Set<IlluminaDataType> dataTypes,
+                                        final boolean fakeFiles,
+                                        final boolean fullTest) {
         if (expectedTiles.isEmpty()) {
             throw new PicardException(
                     "0 input tiles were specified!  Check to make sure this lane is in the InterOp file!");
@@ -208,14 +219,35 @@ public class CheckIlluminaDirectory extends CommandLineProgram {
             numFailures += unmatchedDataTypes.size();
         }
 
+        //get expected cluster counts from bcls
+        final Map<Integer, Long> expectedTilesToClusters = new HashMap<Integer, Long>();
+        final PerTilePerCycleFileUtil bclUtil = (PerTilePerCycleFileUtil) fileUtil.getUtil(IlluminaFileUtil.SupportedIlluminaFormat.Bcl);
+        final CycleIlluminaFileMap fileMap = bclUtil.getFiles();
+
+        //if we are running the full test get the expected clusters for each tile.
+        if (fullTest) {
+            for (IlluminaFileMap cycleFileMap : fileMap.values()) {
+                for (Integer tile : cycleFileMap.keySet()) {
+                    File bclFile = cycleFileMap.get(tile);
+                    BclReader reader = new BclReader(bclFile, new BclQualityEvaluationStrategy(BclQualityEvaluationStrategy.ILLUMINA_ALLEGED_MINIMUM_QUALITY), false);
+                    expectedTilesToClusters.put(tile, reader.getNumClusters());
+                }
+            }
+        } else {
+            //if we aren't running the full test then don't parse the bcl files and use numClusters = 0
+            for (Integer tile : expectedTiles) {
+                expectedTilesToClusters.put(tile, 0l);
+            }
+        }
+
         for (final IlluminaFileUtil.SupportedIlluminaFormat format : formatToDataTypes.keySet()) {
             final ParameterizedFileUtil util = fileUtil.getUtil(format);
-            final List<String> failures = util.verify(expectedTiles, cycles);
+
+            final List<String> failures = util.verify(expectedTilesToClusters, cycles, format, fullTest);
             //if we have failures and we want to fake files then fake them now.
             if (!failures.isEmpty() && fakeFiles) {
                 //fake files
                 util.fakeFiles(expectedTiles, cycles, format);
-
             }
             numFailures += failures.size();
             for (final String failure : failures) {

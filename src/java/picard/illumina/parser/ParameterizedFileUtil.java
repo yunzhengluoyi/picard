@@ -6,6 +6,7 @@ import picard.illumina.parser.fakers.FileFaker;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -88,11 +89,12 @@ public abstract class ParameterizedFileUtil {
      * Given the expected tiles/expected cycles for this file type, return a list of error messages describing any
      * missing/or malformed files
      *
-     * @param expectedTiles  An ordered list of tile numbers
+     * @param expectedClustersPerTiles  A map of tile numbers and expected clusters in each tile
      * @param expectedCycles An ordered list of cycle numbers that may contain gaps
      * @return A list of error messages for this format
      */
-    public abstract List<String> verify(List<Integer> expectedTiles, int[] expectedCycles);
+    public abstract List<String> verify(Map<Integer, Long> expectedClustersPerTiles, int[] expectedCycles, IlluminaFileUtil.SupportedIlluminaFormat format,
+                                        boolean fullTest);
 
     /**
      * Given the expected tiles/expected cycles for this file type create a set of fake files such that the

@@ -32,7 +32,7 @@ import java.util.TreeMap;
  * For "non-cycle" files (files that have multiple cycles per file).  Maps a Tile -> File
  * @author jburke@broadinstitute.org
  */
-class IlluminaFileMap extends TreeMap<Integer, File> {
+public class IlluminaFileMap extends TreeMap<Integer, File> {
 
     /** Return a file map that includes only the tiles listed */
     public IlluminaFileMap keep(final List<Integer> tilesToKeep) {

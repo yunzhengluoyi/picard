@@ -6,11 +6,16 @@ import picard.illumina.parser.fakers.BciFileFaker;
 import picard.illumina.parser.fakers.FileFaker;
 import picard.illumina.parser.fakers.FilterFileFaker;
 import picard.illumina.parser.fakers.MultiTileLocsFileFaker;
+import picard.illumina.parser.readers.AbstractIlluminaFileReader;
+import picard.illumina.parser.readers.IlluminaFileReaderFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * For file types for which there is one file per lane, with fixed record size, and all the tiles in it,
@@ -57,11 +62,28 @@ public abstract class MultiTileFileUtil<OUTPUT_RECORD extends IlluminaData> exte
      * expectedCycles are not checked in this implementation.
      */
     @Override
-    public List<String> verify(final List<Integer> expectedTiles, final int[] expectedCycles) {
+    public List<String> verify(final Map<Integer, Long> expectedTiles, final int[] expectedCycles, IlluminaFileUtil.SupportedIlluminaFormat format,
+                               boolean fullTest) {
         if (tileIndex == null) {
             return Collections.singletonList("Tile index(" + bci.getAbsolutePath() + ") does not exist!");
         }
-        return tileIndex.verify(expectedTiles);
+
+        final List<String> failures = new LinkedList<String>();
+        final List<Integer> tileList = new ArrayList<Integer>();
+        tileList.addAll(expectedTiles.keySet());
+        if (fullTest) {
+            IlluminaFileMap fileMap = this.getTiledFiles(base, matchPattern);
+            for (Integer tile : fileMap.keySet()) {
+                File file = fileMap.get(tile);
+                AbstractIlluminaFileReader reader = IlluminaFileReaderFactory.makeReader(format, file);
+                long numClusters = reader.getNumClusters();
+                if (numClusters != expectedTiles.get(tile)) {
+                    failures.add("Expected " + expectedTiles.get(tile) + " for file " + file.getAbsolutePath() + " but only found " + numClusters);
+                }
+            }
+        }
+        failures.addAll(tileIndex.verify(tileList));
+        return failures;
     }
 
     @Override

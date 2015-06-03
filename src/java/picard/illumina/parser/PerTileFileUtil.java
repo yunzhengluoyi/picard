@@ -1,6 +1,8 @@
 package picard.illumina.parser;
 
 import picard.illumina.parser.fakers.FileFaker;
+import picard.illumina.parser.readers.AbstractIlluminaFileReader;
+import picard.illumina.parser.readers.IlluminaFileReaderFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -8,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 public class PerTileFileUtil extends ParameterizedFileUtil {
     private final IlluminaFileMap fileMap;
@@ -37,17 +40,28 @@ public class PerTileFileUtil extends ParameterizedFileUtil {
     }
 
     @Override
-    public List<String> verify(final List<Integer> expectedTiles, final int[] expectedCycles) {
+    public List<String> verify(final Map<Integer, Long> expectedTiles, final int[] expectedCycles, IlluminaFileUtil.SupportedIlluminaFormat format,
+                               boolean fullTest) {
         final List<String> failures = new LinkedList<String>();
 
         if (!base.exists()) {
             failures.add("Base directory(" + base.getAbsolutePath() + ") does not exist!");
         } else {
-                if (!tiles.containsAll(expectedTiles)) {
-                    final List<Integer> missing = new ArrayList<Integer>(expectedTiles);
+            if (!tiles.containsAll(expectedTiles.keySet())) {
+                final List<Integer> missing = new ArrayList<Integer>(expectedTiles.keySet());
                     missing.removeAll(tiles);
                     failures.add("Missing tile " + missing + " for file type " + extension + ".");
+            } else if (fullTest) {
+                for (Integer tile : fileMap.keySet()) {
+                    File file = fileMap.get(tile);
+                    AbstractIlluminaFileReader reader = IlluminaFileReaderFactory.makeReader(format, file);
+                    long numClusters = reader.getNumClusters();
+                    if (numClusters != expectedTiles.get(tile)) {
+                        failures.add("Expected " + expectedTiles.get(tile) + " for file " + file.getAbsolutePath() + " but only found " + numClusters);
+                    }
                 }
+                }
+
         }
         return failures;
     }

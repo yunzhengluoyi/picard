@@ -2,11 +2,14 @@ package picard.illumina.parser;
 
 import htsjdk.samtools.util.IOUtil;
 import picard.illumina.parser.fakers.MultiTileBclFileFaker;
+import picard.illumina.parser.readers.AbstractIlluminaFileReader;
+import picard.illumina.parser.readers.IlluminaFileReaderFactory;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * NextSeq-style bcl's have all tiles for a cycle in a single file.
@@ -84,14 +87,27 @@ public class MultiTileBclFileUtil extends ParameterizedFileUtil {
     }
 
     @Override
-    public List<String> verify(final List<Integer> expectedTiles, final int[] expectedCycles) {
+    public List<String> verify(final Map<Integer, Long> expectedTiles, final int[] expectedCycles, IlluminaFileUtil.SupportedIlluminaFormat format,
+                               boolean fullTest) {
         if (tileIndex == null) {
             return Collections.singletonList("Tile index(" + bci.getAbsolutePath() + ") does not exist!");
         }
-        final List<String> ret = tileIndex.verify(expectedTiles);
+        final List<Integer> tileList = new ArrayList<Integer>();
+        tileList.addAll(expectedTiles.keySet());
+        final List<String> ret = tileIndex.verify(tileList);
         for (final int expectedCycle : expectedCycles) {
             if (!cycleFileMap.containsKey(expectedCycle)) {
                 ret.add(expectedCycle + ".bcl.bgzf not found in " + base);
+            } else if (fullTest) {
+                IlluminaFileMap fileMap = cycleFileMap.get(expectedCycle);
+                for (Integer tile : fileMap.keySet()) {
+                    File file = fileMap.get(tile);
+                    AbstractIlluminaFileReader reader = IlluminaFileReaderFactory.makeReader(format, file);
+                    long numClusters = reader.getNumClusters();
+                    if (numClusters != expectedTiles.get(tile)) {
+                        ret.add("Expected " + expectedTiles.get(tile) + " for file " + file.getAbsolutePath() + " but only found " + numClusters);
+                    }
+                }
             }
         }
         return ret;

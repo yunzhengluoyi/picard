@@ -3,7 +3,9 @@ package picard.illumina.parser;
 import htsjdk.samtools.util.IOUtil;
 import picard.PicardException;
 import picard.illumina.parser.fakers.FileFaker;
+import picard.illumina.parser.readers.AbstractIlluminaFileReader;
 import picard.illumina.parser.readers.BclReader;
+import picard.illumina.parser.readers.IlluminaFileReaderFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -136,18 +138,23 @@ public class PerTilePerCycleFileUtil extends ParameterizedFileUtil {
     }
 
     @Override
-    public List<String> verify(final List<Integer> expectedTiles, final int[] expectedCycles) {
+    public List<String> verify(final Map<Integer, Long> expectedTiles, final int[] expectedCycles, IlluminaFileUtil.SupportedIlluminaFormat format,
+                               boolean fullTest) {
         final List<String> failures = new LinkedList<String>();
         final Map<Integer, Long> tileToFileLengthMap = new HashMap<Integer, Long>();
 
         if (!base.exists()) {
             failures.add("Base directory(" + base.getAbsolutePath() + ") does not exist!");
         } else {
-            final CycleIlluminaFileMap cfm = getFiles(expectedTiles, expectedCycles);
+            final List<Integer> tileList = new ArrayList<Integer>();
+
+            tileList.addAll(expectedTiles.keySet());
+
+            final CycleIlluminaFileMap cfm = getFiles(tileList, expectedCycles);
             for (final int currentCycle : expectedCycles) {
                 final IlluminaFileMap fileMap = cfm.get(currentCycle);
                 if (fileMap != null) {
-                    for (final int tile : expectedTiles) {
+                    for (final int tile : expectedTiles.keySet()) {
                         final File cycleFile = fileMap.get(tile);
                         if (cycleFile != null) {
                             if (tileToFileLengthMap.get(tile) == null) {
@@ -162,6 +169,13 @@ public class PerTilePerCycleFileUtil extends ParameterizedFileUtil {
                                         "Length of first non-empty file (" + tileToFileLengthMap.get(tile)
                                         + ") length of current cycle (" + cycleFile.length() + ")"
                                         + " File(" + cycleFile.getAbsolutePath() + ")");
+                            } else if (fullTest) {
+                                File file = fileMap.get(tile);
+                                AbstractIlluminaFileReader reader = IlluminaFileReaderFactory.makeReader(format, file);
+                                long numClusters = reader.getNumClusters();
+                                if (numClusters != expectedTiles.get(tile)) {
+                                    failures.add("Expected " + expectedTiles.get(tile) + " for file " + file.getAbsolutePath() + " but only found " + numClusters);
+                                }
                             }
                         } else {
                             failures.add("File type " + extension + " is missing a file for cycle " + currentCycle + " and tile " + tile);

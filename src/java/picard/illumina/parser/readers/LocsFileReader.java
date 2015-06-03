@@ -116,4 +116,9 @@ public class LocsFileReader extends AbstractIlluminaPositionFileReader {
     public void skipRecords(final int numToSkip) {
         bbIterator.skipElements(numToSkip * 2);
     }
+
+    @Override
+    public Long getNumClusters() {
+        return numClusters;
+    }
 }

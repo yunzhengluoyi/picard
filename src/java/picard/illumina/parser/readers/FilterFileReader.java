@@ -37,7 +37,7 @@ import java.util.Iterator;
  * Bytes 4-7  : unsigned int version
  * Bytes 8-11 : unsigned int numClusters
  */
-public class FilterFileReader implements Iterator<Boolean> {
+public class FilterFileReader extends AbstractIlluminaFileReader implements Iterator<Boolean> {
     /** Number of bytes in the files header that will be skipped by the iterator*/
     private static final int HEADER_SIZE  = 12;
 
@@ -110,5 +110,10 @@ public class FilterFileReader implements Iterator<Boolean> {
 
     public void remove() {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Long getNumClusters() {
+        return numClusters;
     }
 }

@@ -42,7 +42,8 @@ import java.util.regex.Pattern;
  *  Currently these readers also return lane/tile but this will be unnecessary in future releases.
  */
 
-public abstract class AbstractIlluminaPositionFileReader implements CloseableIterator<AbstractIlluminaPositionFileReader.PositionInfo> {
+public abstract class AbstractIlluminaPositionFileReader extends AbstractIlluminaFileReader
+        implements CloseableIterator<AbstractIlluminaPositionFileReader.PositionInfo> {
     public static final float MAX_POS = 9999999.99f;
 
     /**

@@ -86,4 +86,9 @@ public class PosFileReader extends AbstractIlluminaPositionFileReader {
     public void close() {
         CloserUtil.close(parser);
     }
+
+    @Override
+    public Long getNumClusters() {
+        return null;
+    }
 }

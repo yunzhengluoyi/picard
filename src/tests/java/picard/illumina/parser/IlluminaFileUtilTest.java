@@ -17,8 +17,10 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -175,9 +177,12 @@ public class IlluminaFileUtilTest {
         for (int i = 0; i < 3; i++) {
             final IlluminaFileUtil fileUtil = new IlluminaFileUtil(new File(intensityDir, "BaseCalls"), DEFAULT_LANE + i);
 
-
+            Map<Integer, Long> tileToCluster = new HashMap<Integer, Long>();
+            for (Integer tile : DEFAULT_TILES) {
+                tileToCluster.put(tile, 0l);
+            }
             for (final SupportedIlluminaFormat format : FORMATS_TO_TEST) {
-                Assert.assertEquals(new ArrayList<String>(), fileUtil.getUtil(format).verify(DEFAULT_TILES, DEFAULT_CYCLES));
+                Assert.assertEquals(new ArrayList<String>(), fileUtil.getUtil(format).verify(tileToCluster, DEFAULT_CYCLES, format, false));
             }
         }
     }

@@ -78,8 +78,13 @@ public class ClocsFileReader extends AbstractIlluminaPositionFileReader {
     private long currentBin;
     private int numClustersInBin;   //MAX 255
     private long currentClusterInBin;
+    private long numClusters = 0;
 
     public ClocsFileReader(final File clocsFile) {
+        this(clocsFile, false);
+    }
+
+    public ClocsFileReader(final File clocsFile, boolean count) {
         super(clocsFile);
 
         byteIterator = MMapBackedIteratorFactory.getByteIterator(HEADER_SIZE, clocsFile);
@@ -94,6 +99,14 @@ public class ClocsFileReader extends AbstractIlluminaPositionFileReader {
         startBlock();
 
         checkAndAdvanceBin();
+        if (count) {
+            ClocsFileReader counter = new ClocsFileReader(clocsFile);
+            while (counter.hasNext()) {
+                counter.next();
+                numClusters++;
+            }
+            counter.close();
+        }
     }
 
     /**
@@ -157,6 +170,6 @@ public class ClocsFileReader extends AbstractIlluminaPositionFileReader {
 
     @Override
     public Long getNumClusters() {
-        return null;
+        return numClusters;
     }
 }

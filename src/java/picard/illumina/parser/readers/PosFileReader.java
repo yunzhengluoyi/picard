@@ -45,10 +45,23 @@ import java.io.File;
 public class PosFileReader extends AbstractIlluminaPositionFileReader {
 
     private final BasicInputParser parser;
+    private long numClusters = 0;
 
     public PosFileReader(final File posFile) {
+        this(posFile, false);
+    }
+
+    public PosFileReader(final File posFile, boolean count) {
         super(posFile);
-        this.parser  = new BasicInputParser(true, posFile);
+        this.parser = new BasicInputParser(true, posFile);
+        if (count) {
+            BasicInputParser counter = new BasicInputParser(true, posFile);
+            while (counter.hasNext()) {
+                counter.next();
+                numClusters++;
+            }
+            counter.close();
+        }
     }
 
     /** Read a line of text and parse it into two float values, create a PositionInfo and return it */
@@ -89,6 +102,6 @@ public class PosFileReader extends AbstractIlluminaPositionFileReader {
 
     @Override
     public Long getNumClusters() {
-        return null;
+        return numClusters;
     }
 }

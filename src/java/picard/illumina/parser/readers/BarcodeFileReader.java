@@ -19,9 +19,22 @@ public class BarcodeFileReader extends AbstractIlluminaFileReader implements Clo
     private static final int Y_OR_N_COLUMN = 1;
     private static final int BARCODE_COLUMN = 2;
     private final BasicInputParser textIterator;
+    private long numClusters = 0;
 
     public BarcodeFileReader(final File barcodeFile) {
+        this(barcodeFile, false);
+    }
+
+    public BarcodeFileReader(final File barcodeFile, boolean count) {
         this.textIterator = new BasicInputParser(false, barcodeFile);
+        if (count) {
+            BasicInputParser counter = new BasicInputParser(false, barcodeFile);
+            while (counter.hasNext()) {
+                counter.next();
+                numClusters++;
+            }
+            counter.close();
+        }
     }
 
     @Override
@@ -52,6 +65,6 @@ public class BarcodeFileReader extends AbstractIlluminaFileReader implements Clo
 
     @Override
     public Long getNumClusters() {
-        return null;
+        return numClusters;
     }
 }

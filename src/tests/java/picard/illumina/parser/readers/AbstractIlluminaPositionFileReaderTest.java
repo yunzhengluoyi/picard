@@ -76,7 +76,7 @@ public class AbstractIlluminaPositionFileReaderTest {
 
         @Override
         public Long getNumClusters() {
-            return null;
+            return 0l;
         }
     }
 

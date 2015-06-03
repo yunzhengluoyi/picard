@@ -10,7 +10,7 @@ public class IlluminaFileReaderFactory {
         AbstractIlluminaFileReader reader;
         switch (format) {
             case Barcode:
-                reader = new BarcodeFileReader(file);
+                reader = new BarcodeFileReader(file, true);
                 break;
 
             case Bcl:
@@ -26,11 +26,11 @@ public class IlluminaFileReaderFactory {
                 break;
 
             case Clocs:
-                reader = new ClocsFileReader(file);
+                reader = new ClocsFileReader(file, true);
                 break;
 
             case Pos:
-                reader = new PosFileReader(file);
+                reader = new PosFileReader(file, true);
                 break;
 
             default:

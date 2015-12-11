@@ -45,12 +45,12 @@ public class DuplicationByInsertGcContentTest extends CommandLineProgramTest {
     public void testGCcontent() throws IOException {
         //final File input = new File(TEST_DATA_DIR, "insert_size_metrics_test.sam");
         //final File ref = new File(TEST_DATA_DIR, "merger.fasta");
-        //final File ref = new File("testdata/picard/quality/chrM.reference.fasta");
-        //final File input = new File("testdata/picard/quality/chrMReadsDiffereingLengths.sam");
+        final File ref = new File("testdata/picard/quality/chrM.reference.fasta");
+        final File input = new File("testdata/picard/quality/chrMReadsDiffereingLengths.sam");
         //final File ref = new File("/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta");
         //final File input = new File(TEST_DATA_DIR, "test_chrm21_rg2.bam");
-        final File ref = new File("testdata/picard/metrics/chrMNO.reference.fasta");
-        final File input = new File("/Users/hogstrom/Documents/code/picard/testdata/picard/sam/CollectGcBiasMetrics/CollectGcBias6098159690966723109.bam");
+        //final File ref = new File("testdata/picard/metrics/chrMNO.reference.fasta");
+        //final File input = new File("/Users/hogstrom/Documents/code/picard/testdata/picard/sam/CollectGcBiasMetrics/CollectGcBias6098159690966723109.bam");
         final File outfile = File.createTempFile("test", ".insert_GC_by_dup");
         final File pdf = File.createTempFile("test", ".pdf");
         //outfile.deleteOnExit();

@@ -23,9 +23,9 @@
  */
 
 package picard.analysis;
+//package htsjdk.samtools;
 
 import htsjdk.samtools.SAMFileHeader;
-import htsjdk.samtools.SAMReadGroupRecord;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.metrics.MetricsFile;
 import htsjdk.samtools.reference.ReferenceSequence;
@@ -50,7 +50,7 @@ import java.util.List;
         usageShort = "Writes insert size counts for both duplate and non-duplate reads",
         programGroup = Metrics.class
 )
-public class scratchDuplicationByInsertGcContent extends SinglePassSamProgram {
+public class DuplicationByInsertGcContent extends SinglePassSamProgram {
 
     @Option(shortName="CHART", doc="A file (with .pdf extension) to write the chart to.")
     public File CHART_OUTPUT;
@@ -62,12 +62,6 @@ public class scratchDuplicationByInsertGcContent extends SinglePassSamProgram {
     public boolean PF_READS_ONLY = false;
 
     private final HistogramGenerator q  = new HistogramGenerator(false);
-
-    /**
-     * A subtitle for the plot, usually corresponding to a library.
-     */
-    private String plotSubtitle = "";
-
 
     /** Required main method. */
     public static void main(String[] args) {
@@ -84,7 +78,7 @@ public class scratchDuplicationByInsertGcContent extends SinglePassSamProgram {
         }
 
         //will hold the relevant gc information per contig
-        private int gc = -1;
+        private int gc = -99;
         private int gcC = -1;
         private int referenceIndex = -1;
         private byte [] refBases = null;
@@ -93,8 +87,8 @@ public class scratchDuplicationByInsertGcContent extends SinglePassSamProgram {
         void addRecord(final SAMRecord rec, final ReferenceSequence ref1) {
             // calculate sliding cumulative GC count along reference contig
             if (!rec.getReadUnmappedFlag()) {
-                if (referenceIndex != rec.getReferenceIndex() || gc == -1) {
-                    //System.out.println("calculating ref i=" + rec.getReferenceIndex() + ", gc=" + gc);
+                if (referenceIndex != rec.getReferenceIndex() || gc == -99) {
+                    System.out.println("calculating ref i=" + rec.getReferenceIndex() + ", gc=" + gc);
                     refBases = ref1.getBases();
                     StringUtil.toUpperCase(refBases);
                     final int refLength = refBases.length;
@@ -110,18 +104,16 @@ public class scratchDuplicationByInsertGcContent extends SinglePassSamProgram {
                             ++nCount;
                         }
                         gcCumList[i] = gcCount;
-                        //gcCumCount.add(gcCumList);
                     }
                     gcCumCount.add(gcCumList);
                     referenceIndex = rec.getReferenceIndex();
                 }
-                int iSz = rec.getInferredInsertSize();
+                int iSz = Math.abs(rec.getInferredInsertSize());
                 int iStart = rec.getStart();
-                //final int[] gcL = gcCumCount.get(1);
                 final int[] gcL = gcCumCount.get(0);
-                boolean maxOver = (iStart + iSz) > ref1.length();
-                boolean inBounds = (iStart >= 0) && (iStart < gcL.length);
-                if (maxOver || inBounds) {
+                boolean outBounds = (iStart < 0) || (iSz < 0) || ((iStart  +iSz) >= gcL.length);
+                final int szMax = 5000;
+                if (outBounds || (iSz > szMax) || (gcL.length <=0)) {
                     gcC = -1;
                 } else {
                     gcC = (gcL[iStart + iSz] - gcL[iStart]);
@@ -145,15 +137,7 @@ public class scratchDuplicationByInsertGcContent extends SinglePassSamProgram {
         IOUtil.assertFileIsWritable(CHART_OUTPUT);
         // If we're working with a single library, assign that library's name
         // as a suffix to the plot title
-        final List<SAMReadGroupRecord> readGroups = header.getReadGroups();
-        if (readGroups.size() == 1) {
-            plotSubtitle = StringUtil.asEmptyIfNull(readGroups.get(0).getLibrary());
-        }
     }
-/*    @Override
-    protected void dowork(){
-        SinglePassSamProgram.makeItSo(INPUT, REFERENCE_SEQUENCE, ASSUME_SORTED, STOP_AFTER);
-    }*/
 
     @Override
     protected void acceptRead(final SAMRecord rec, final ReferenceSequence ref) {
@@ -167,23 +151,11 @@ public class scratchDuplicationByInsertGcContent extends SinglePassSamProgram {
     @Override
     protected void finish() {
         // Generate a "Histogram" of insert size length
+        System.out.println("test1");
         final MetricsFile<?,Integer> metrics = getMetricsFile();
         metrics.addHistogram(q.insertHistDup);
         metrics.addHistogram(q.insertHistNotDup);
         metrics.write(OUTPUT);
-        /*else {
-            // Now run R to generate a chart
-            final int rResult = RExecutor.executeFromClasspath(
-                    "picard/analysis/meanQualityByCycle.R",
-                    OUTPUT.getAbsolutePath(),
-                    CHART_OUTPUT.getAbsolutePath(),
-                    INPUT.getName(),
-                    plotSubtitle);
-
-            if (rResult != 0) {
-                throw new PicardException("R script meanQualityByCycle.R failed with return code " + rResult);
-            }
-        }*/
     }
 }
 

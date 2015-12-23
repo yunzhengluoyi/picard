@@ -70,8 +70,8 @@ public class CollectVariantCallingMetrics extends CommandLineProgram {
             doc = "If present, speeds loading of dbSNP file")
     public File SEQUENCE_DICTIONARY = null;
 
-    @Option(doc = "Deprecated option will be removed in a future release.")
-    public Boolean REQUIRE_INDEX = false;
+    @Option(doc = "Set to true if running on a single-sample gvcf.", optional = true)
+    public boolean GVCF_INPUT = false;
 
     @Option
     public int THREAD_COUNT = 1;
@@ -103,21 +103,14 @@ public class CollectVariantCallingMetrics extends CommandLineProgram {
 
         final VariantProcessor.Builder<CallingMetricAccumulator, CallingMetricAccumulator.Result> builder =
                 VariantProcessor.Builder
-                        .generatingAccumulatorsBy(
-                                new VariantProcessor.AccumulatorGenerator<CallingMetricAccumulator, CallingMetricAccumulator.Result>() {
-                                    @Override
-                                    public CallingMetricAccumulator build() {
-                                        return new CallingMetricAccumulator(dbsnp);
-                                    }
-                                })
-                        .combiningResultsBy(
-                                new VariantProcessor.ResultMerger<CallingMetricAccumulator.Result>() {
-                                    @Override
-                                    public CallingMetricAccumulator.Result merge(final Collection<CallingMetricAccumulator.Result>
-                                                                                         resultsToReduce) {
-                                        return CallingMetricAccumulator.Result.merge(resultsToReduce);
-                                    }
-                                })
+                        .generatingAccumulatorsBy(() -> {
+                            if (GVCF_INPUT) {
+                                return new GvcfMetricAccumulator(dbsnp);
+                            } else {
+                                return new CallingMetricAccumulator(dbsnp);
+                            }
+                        })
+                        .combiningResultsBy(CallingMetricAccumulator.Result::merge)
                         .withInput(INPUT)
                         .multithreadingBy(THREAD_COUNT);
 
@@ -131,9 +124,7 @@ public class CollectVariantCallingMetrics extends CommandLineProgram {
         final MetricsFile<CollectVariantCallingMetrics.VariantCallingDetailMetrics, Integer> detail = getMetricsFile();
         final MetricsFile<CollectVariantCallingMetrics.VariantCallingSummaryMetrics, Integer> summary = getMetricsFile();
         summary.addMetric(result.summary);
-        for (final CollectVariantCallingMetrics.VariantCallingDetailMetrics detailMetric : result.details) {
-            detail.addMetric(detailMetric);
-        }
+        result.details.forEach(detail::addMetric);
         final String outputPrefix = OUTPUT.getAbsolutePath() + ".";
         detail.write(new File(outputPrefix + CollectVariantCallingMetrics.VariantCallingDetailMetrics.getFileExtension()));
         summary.write(new File(outputPrefix + CollectVariantCallingMetrics.VariantCallingSummaryMetrics.getFileExtension()));

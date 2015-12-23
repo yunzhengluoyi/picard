@@ -33,13 +33,12 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
         }
 
         public static Result merge(final Collection<Result> results) {
-            final Collection<VariantCallingDetailMetrics> details = new ArrayList<VariantCallingDetailMetrics>();
-            final Collection<VariantCallingSummaryMetrics> summaries = new ArrayList<VariantCallingSummaryMetrics>();
+            final Collection<VariantCallingDetailMetrics> details = new ArrayList<>();
+            final Collection<VariantCallingSummaryMetrics> summaries = new ArrayList<>();
             for (final Result result : results) {
                 summaries.add(result.summary);
                 details.addAll(result.details);
             }
-
 
             final Map<String, Collection<CollectVariantCallingMetrics.VariantCallingDetailMetrics>> sampleDetailsMap = CollectionUtil.partition(details,
                     new CollectionUtil.Partitioner<CollectVariantCallingMetrics.VariantCallingDetailMetrics, String>() {
@@ -54,7 +53,6 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
                 VariantCallingDetailMetrics.foldInto(collapsed, sampleDetails);
                 collapsedDetails.add(collapsed);
             }
-
 
             final VariantCallingSummaryMetrics collapsedSummary = new VariantCallingSummaryMetrics();
             VariantCallingSummaryMetrics.foldInto(collapsedSummary, summaries);
@@ -73,14 +71,11 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
      * then returned.
      */
     private final CollectionUtil.DefaultingMap<String, VariantCallingDetailMetrics> sampleMetricsMap =
-            new CollectionUtil.DefaultingMap<String, VariantCallingDetailMetrics>(
-                    new CollectionUtil.DefaultingMap.Factory<VariantCallingDetailMetrics, String>() {
-                        @Override
-                        public VariantCallingDetailMetrics make(final String sampleName) {
-                            final VariantCallingDetailMetrics detail = new VariantCallingDetailMetrics();
-                            detail.SAMPLE_ALIAS = sampleName;
-                            return detail;
-                        }
+            new CollectionUtil.DefaultingMap<>(
+                    sampleName -> {
+                        final VariantCallingDetailMetrics detail = new VariantCallingDetailMetrics();
+                        detail.SAMPLE_ALIAS = sampleName;
+                        return detail;
                     }, true);
 
     public CallingMetricAccumulator(final DbSnpBitSetUtil.DbSnpBitSets dbsnp) {
@@ -90,17 +85,19 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
     /** Incorporates the provided variant's data into the metric analysis. */
     @Override
     public void accumulate(final VariantContext vc) {
-        progress.record(vc.getChr(), vc.getStart());
+        progress.record(vc.getContig(), vc.getStart());
         if (!isVariantExcluded(vc)) {
             final String singletonSample = getSingletonSample(vc);
             updateSummaryMetric(summaryMetric, null, vc, singletonSample != null); // The summary metric has no genotype.
-            for (final String sampleName : vc.getSampleNames()) {
-                // Skip homozygous reference calls.
-                if (!vc.getGenotype(sampleName).isHomRef()) {
-                    updateDetailMetric(sampleMetricsMap.get(sampleName), vc.getGenotype(sampleName), vc,
-                            sampleName.equals(singletonSample));
-                }
-            }
+
+            // Skip homozygous reference calls.
+            vc.getSampleNames()
+                    .stream()
+                    // Skip homozygous reference calls.
+                    .filter(sampleName -> !vc.getGenotype(sampleName).isHomRef())
+                    .forEach(sampleName ->
+                            updateDetailMetric(sampleMetricsMap.get(sampleName), vc.getGenotype(sampleName), vc,
+                                    sampleName.equals(singletonSample)));
         }
     }
 
@@ -147,7 +144,7 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
         // Skip calls which are homozygous reference for all samples.
         for (final String sample : vc.getSampleNames()) {
             if (!vc.getGenotype(sample).isHomRef()) {
-                return false; // TODO: Is this correct?
+                return false;
             }
         }
 
@@ -192,7 +189,7 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
 
         if (vc.isBiallelic() && vc.isSNP()) {
             // Biallelic SNPs
-            final boolean isInDbSnp = dbsnp.snps.isDbSnpSite(vc.getChr(), vc.getStart());
+            final boolean isInDbSnp = dbsnp.snps.isDbSnpSite(vc.getContig(), vc.getStart());
             final boolean isTransition = isTransition(vc);
 
             metric.TOTAL_SNPS++;
@@ -231,7 +228,7 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
         } else if (vc.isSNP() && vc.getAlternateAlleles().size() > 1) {
             // Multiallelic SNPs
             metric.TOTAL_MULTIALLELIC_SNPS++;
-            if (dbsnp.snps.isDbSnpSite(vc.getChr(), vc.getStart())) metric.NUM_IN_DB_SNP_MULTIALLELIC++;
+            if (dbsnp.snps.isDbSnpSite(vc.getContig(), vc.getStart())) metric.NUM_IN_DB_SNP_MULTIALLELIC++;
         } else if (vc.isIndel() && !vc.isComplexIndel()) {
             // Simple Indels
             final boolean isInDbSnp = dbsnp.indels.isDbSnpSite(vc.getChr(), vc.getStart());
@@ -252,7 +249,7 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
         } else if (vc.isComplexIndel()) {
             // Complex Indels
             metric.TOTAL_COMPLEX_INDELS++;
-            if (dbsnp.indels.isDbSnpSite(vc.getChr(), vc.getStart())) metric.NUM_IN_DB_SNP_COMPLEX_INDELS++;
+            if (dbsnp.indels.isDbSnpSite(vc.getContig(), vc.getStart())) metric.NUM_IN_DB_SNP_COMPLEX_INDELS++;
         }
 
     }
@@ -275,6 +272,8 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
      * T->A
      * T->G
      */
+
+    //TODO: move to htsjdk
     static private boolean isTransition(final VariantContext vc) {
         final byte refAllele = vc.getReference().getBases()[0];
         final Collection<Allele> altAlleles = vc.getAlternateAlleles();

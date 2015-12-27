@@ -96,13 +96,7 @@ public class CollectIlluminaLaneMetrics extends CommandLineProgram {
                 throw new PicardException("Unable to open laneMetrics file.", e);
             }
     
-            return CollectionUtil.partition(tiles,
-                    new CollectionUtil.Partitioner<Tile, Integer>() {
-                        @Override
-                        public Integer getPartition(final Tile tile) {
-                            return tile.getLaneNumber();
-                        }
-                    });
+            return CollectionUtil.partition(tiles, Tile::getLaneNumber);
         }
 
         /** Parses the tile data from the basecall directory and writes to both the lane and phasing metrics files */
@@ -118,11 +112,9 @@ public class CollectIlluminaLaneMetrics extends CommandLineProgram {
         public static File writePhasingMetrics(final Map<Integer, Collection<Tile>> laneTiles, final File outputDirectory,
                                                final String outputPrefix, final MetricsFile<MetricBase, Comparable<?>> phasingMetricsFile) {
             for (final Map.Entry<Integer, Collection<Tile>> entry : laneTiles.entrySet()) {
-                for (final IlluminaPhasingMetrics phasingMetric : IlluminaPhasingMetrics.getPhasingMetricsForTiles(entry.getKey()
-                        .longValue(),
-                        entry.getValue())) {
-                    phasingMetricsFile.addMetric(phasingMetric);
-                }
+                IlluminaPhasingMetrics.getPhasingMetricsForTiles(entry.getKey()
+                                .longValue(),
+                        entry.getValue()).forEach(phasingMetricsFile::addMetric);
             }
 
             return writeMetrics(phasingMetricsFile, outputDirectory, outputPrefix, IlluminaPhasingMetrics.getExtension());

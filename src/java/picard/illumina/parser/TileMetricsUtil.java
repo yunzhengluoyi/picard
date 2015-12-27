@@ -74,7 +74,7 @@ public class TileMetricsUtil {
 
         // Collect the tiles by lane & tile, and then collect the metrics by lane
         final Map<String, Collection<IlluminaTileMetrics>> locationToMetricsMap = partitionTileMetricsByLocation(tileMetrics);
-        final Collection<Tile> tiles = new LinkedList<Tile>();
+        final Collection<Tile> tiles = new LinkedList<>();
         for (final Map.Entry<String, Collection<IlluminaTileMetrics>> entry : locationToMetricsMap.entrySet()) {
             final Collection<IlluminaTileMetrics> tileRecords = entry.getValue();
 
@@ -102,7 +102,7 @@ public class TileMetricsUtil {
     /** Pulls out the phasing & prephasing value for the template reads and returns a collection of TilePhasingValues representing these */
     private static Collection<TilePhasingValue> getTilePhasingValues(final Map<Integer, Collection<IlluminaTileMetrics>> codeMetricsMap, final ReadStructure readStructure) {
         boolean isFirstRead = true;
-        final Collection<TilePhasingValue> tilePhasingValues = new ArrayList<TilePhasingValue>();
+        final Collection<TilePhasingValue> tilePhasingValues = new ArrayList<>();
         for (int descriptorIndex = 0; descriptorIndex < readStructure.descriptors.size(); descriptorIndex++) {
             if (readStructure.descriptors.get(descriptorIndex).type == ReadType.Template) {
                 final TileTemplateRead tileTemplateRead = isFirstRead ? TileTemplateRead.FIRST : TileTemplateRead.SECOND;
@@ -127,8 +127,8 @@ public class TileMetricsUtil {
     /** According to Illumina, for every lane/tile/code combination they will only use the last value. Filter out the previous values */
     private static Collection<IlluminaTileMetrics> determineLastValueForLaneTileMetricsCode(final Iterator<IlluminaTileMetrics>
                                                                                                     tileMetricsIterator) {
-        final Map<TileMetricsOutReader.IlluminaLaneTileCode, IlluminaTileMetrics> filteredTileMetrics = new HashMap<TileMetricsOutReader.IlluminaLaneTileCode, IlluminaTileMetrics>();
-        for (final IlluminaTileMetrics illuminaTileMetrics : new IterableAdapter<IlluminaTileMetrics>(tileMetricsIterator)) {
+        final Map<TileMetricsOutReader.IlluminaLaneTileCode, IlluminaTileMetrics> filteredTileMetrics = new HashMap<>();
+        for (final IlluminaTileMetrics illuminaTileMetrics : new IterableAdapter<>(tileMetricsIterator)) {
             filteredTileMetrics.put(illuminaTileMetrics.getLaneTileCode(), illuminaTileMetrics);
         }
 
@@ -141,21 +141,12 @@ public class TileMetricsUtil {
 
     // Wrapper around CollectionUtil.Partitioner, purely to de-bulk the actual methods
     private static Map<Integer, Collection<IlluminaTileMetrics>> partitionTileMetricsByCode(final Collection<IlluminaTileMetrics> tileMetrics) {
-        return CollectionUtil.partition(tileMetrics, new CollectionUtil.Partitioner<IlluminaTileMetrics, Integer>() {
-            @Override
-            public Integer getPartition(final IlluminaTileMetrics metric) {
-                return metric.getMetricCode();
-            }
-        });
+        return CollectionUtil.partition(tileMetrics, IlluminaTileMetrics::getMetricCode);
     }
 
     // Wrapper around CollectionUtil.Partitioner, purely to de-bulk the actual methods
     private static Map<String, Collection<IlluminaTileMetrics>> partitionTileMetricsByLocation(final Collection<IlluminaTileMetrics> tileMetrics) {
-        return CollectionUtil.partition(tileMetrics, new CollectionUtil.Partitioner<IlluminaTileMetrics, String>() {
-            @Override
-            public String getPartition(final IlluminaTileMetrics metric) {
-                return renderMetricLocationKey(metric);
-            }
-        });
+        return CollectionUtil.partition(tileMetrics, TileMetricsUtil::renderMetricLocationKey);
+
     }
 }

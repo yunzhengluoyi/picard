@@ -101,15 +101,10 @@ public class Tile {
 
     /** For any given TileTemplateRead, we want to make sure that there is only a single TilePhasingValue */
     private static Collection<TilePhasingValue> ensureSoleTilePhasingValuesPerRead(final Collection<TilePhasingValue> tilePhasingValues) {
-        final Map<TileTemplateRead, Collection<TilePhasingValue>> partitionedMap = CollectionUtil.partition(tilePhasingValues,
-                new CollectionUtil.Partitioner<TilePhasingValue, TileTemplateRead>() {
-                    @Override
-                    public TileTemplateRead getPartition(final TilePhasingValue phasingValue) {
-                        return phasingValue.getTileTemplateRead();
-                    }
-                });
+        final Map<TileTemplateRead, Collection<TilePhasingValue>> partitionedMap = CollectionUtil.
+                partition(tilePhasingValues, TilePhasingValue::getTileTemplateRead);
 
-        final Collection<TilePhasingValue> newTilePhasingValues = new LinkedList<TilePhasingValue>();
+        final Collection<TilePhasingValue> newTilePhasingValues = new LinkedList<>();
         for (final TileTemplateRead read : partitionedMap.keySet()) {
             newTilePhasingValues.add(CollectionUtil.getSoleElement(partitionedMap.get(read)));
         }

@@ -6,18 +6,20 @@ import htsjdk.samtools.util.ProgressLogger;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.Genotype;
 import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.vcf.VCFHeader;
 import picard.util.DbSnpBitSetUtil;
 import picard.vcf.processor.VariantProcessor;
-
-import static picard.vcf.CollectVariantCallingMetrics.VariantCallingSummaryMetrics;
-import static picard.vcf.CollectVariantCallingMetrics.VariantCallingDetailMetrics;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
+import java.util.OptionalInt;
+
+import static picard.vcf.CollectVariantCallingMetrics.VariantCallingDetailMetrics;
+import static picard.vcf.CollectVariantCallingMetrics.VariantCallingSummaryMetrics;
 
 /**
- * Collects variants and generates metrics about them.  To use, construct, call
+ * Collects variants and generates metrics about them.  To use, construct, call {@link #setup(VCFHeader)} once, then
  * {@link #accumulate(htsjdk.variant.variantcontext.VariantContext)} as desired, then call {@link #result()}.
  *
  * @author mccowan
@@ -35,24 +37,21 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
         public static Result merge(final Collection<Result> results) {
             final Collection<VariantCallingDetailMetrics> details = new ArrayList<>();
             final Collection<VariantCallingSummaryMetrics> summaries = new ArrayList<>();
-            for (final Result result : results) {
+            results.stream().forEach(result -> {
                 summaries.add(result.summary);
                 details.addAll(result.details);
-            }
+            });
 
-            final Map<String, Collection<CollectVariantCallingMetrics.VariantCallingDetailMetrics>> sampleDetailsMap = CollectionUtil.partition(details,
-                    new CollectionUtil.Partitioner<CollectVariantCallingMetrics.VariantCallingDetailMetrics, String>() {
-                        @Override
-                        public String getPartition(final CollectVariantCallingMetrics.VariantCallingDetailMetrics variantCallingDetailMetrics) {
-                            return variantCallingDetailMetrics.SAMPLE_ALIAS;
-                        }
-                    });
-            final Collection<CollectVariantCallingMetrics.VariantCallingDetailMetrics> collapsedDetails = new ArrayList<VariantCallingDetailMetrics>();
-            for (final Collection<VariantCallingDetailMetrics> sampleDetails : sampleDetailsMap.values()) {
+            final Map<String, Collection<CollectVariantCallingMetrics.VariantCallingDetailMetrics>> sampleDetailsMap =
+                    CollectionUtil.partition(details, vcDetailMetrics-> vcDetailMetrics.SAMPLE_ALIAS);
+
+            final Collection<CollectVariantCallingMetrics.VariantCallingDetailMetrics> collapsedDetails = new ArrayList<>();
+
+            sampleDetailsMap.values().stream().forEach(sampleDetails -> {
                 final VariantCallingDetailMetrics collapsed = new VariantCallingDetailMetrics();
                 VariantCallingDetailMetrics.foldInto(collapsed, sampleDetails);
                 collapsedDetails.add(collapsed);
-            }
+            });
 
             final VariantCallingSummaryMetrics collapsedSummary = new VariantCallingSummaryMetrics();
             VariantCallingSummaryMetrics.foldInto(collapsedSummary, summaries);
@@ -82,6 +81,10 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
         this.dbsnp = dbsnp;
     }
 
+    public void setup(final VCFHeader vcfHeader){
+        //noop.
+    }
+
     /** Incorporates the provided variant's data into the metric analysis. */
     @Override
     public void accumulate(final VariantContext vc) {
@@ -90,10 +93,7 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
             final String singletonSample = getSingletonSample(vc);
             updateSummaryMetric(summaryMetric, null, vc, singletonSample != null); // The summary metric has no genotype.
 
-            // Skip homozygous reference calls.
-            vc.getSampleNames()
-                    .stream()
-                    // Skip homozygous reference calls.
+            vc.getSampleNames().stream()
                     .filter(sampleName -> !vc.getGenotype(sampleName).isHomRef())
                     .forEach(sampleName ->
                             updateDetailMetric(sampleMetricsMap.get(sampleName), vc.getGenotype(sampleName), vc,
@@ -105,50 +105,44 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
      * @return Sample name if there is only one sample that contains alternate allele(s), else null if either multiple samples that
      * are not homref, or no samples that are not homref.
      */
-    private String getSingletonSample(final VariantContext vc) {
-        String singletonSample = null;
-        for (final String sampleName : vc.getSampleNames()) {
-            final Genotype genotype = vc.getGenotype(sampleName);
-            if (genotype.isHomVar()) {
-                return null;
-            } else if (genotype.isHet()) {
-                if (singletonSample != null) {
-                    // second sample with non-reference allele, so not a singleton
-                    return null;
-                } else {
-                    singletonSample = sampleName;
-                }
-            }
+    protected static String getSingletonSample(final VariantContext vc) {
+
+        // peek can only change effectively final variables...workaround
+        final String[] sampleName = new String[1];
+
+        final OptionalInt chromosomeCount =  vc.getGenotypes().stream()
+                // look at het or homVar genotypes
+                .filter(genotype -> genotype.isHet() || genotype.isHomVar())
+                // two such genotypes will be enough
+                .limit(2)
+                //get any of the sample names
+                .peek(genotype -> sampleName[0] = genotype.getSampleName())
+                //map to the number of variant chromosomes
+                .mapToInt(genotype -> genotype.isHet() ? 1 : 2)
+                //add them up.
+                .reduce(Integer::sum);
+
+        // singleton means that we found exactly 1 variant chromosome:
+        if (chromosomeCount.isPresent() && chromosomeCount.getAsInt() == 1) {
+            return sampleName[0];
+        } else {
+            return null;
         }
-        return singletonSample;
     }
 
     public Result result() {
         final Collection<VariantCallingDetailMetrics> values = sampleMetricsMap.values();
-        for (final VariantCallingDetailMetrics value : values) {
-            value.updateDerivedValuesInPlace();
-        }
+        values.forEach(CollectVariantCallingMetrics.VariantCallingDetailMetrics::updateDerivedValuesInPlace);
 
         summaryMetric.updateDerivedValuesInPlace();
         return new Result(summaryMetric, values);
     }
 
     /** Returns true if the variant is --NOT-- interesting enough to be included in metrics calculations. */
-    private boolean isVariantExcluded(final VariantContext vc) {
+    static private boolean isVariantExcluded(final VariantContext vc) {
 
         // If the entire record is not a variant, exclude it
-        if (!vc.isVariant()) {
-            return true;
-        }
-
-        // Skip calls which are homozygous reference for all samples.
-        for (final String sample : vc.getSampleNames()) {
-            if (!vc.getGenotype(sample).isHomRef()) {
-                return false;
-            }
-        }
-
-        return true;
+        return !vc.isVariant() || vc.getGenotypes().stream().allMatch(Genotype::isHomRef);
     }
 
     private void updateDetailMetric(final VariantCallingDetailMetrics metric,
@@ -251,7 +245,6 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
             metric.TOTAL_COMPLEX_INDELS++;
             if (dbsnp.indels.isDbSnpSite(vc.getContig(), vc.getStart())) metric.NUM_IN_DB_SNP_COMPLEX_INDELS++;
         }
-
     }
 
     /**
@@ -295,5 +288,4 @@ public class CallingMetricAccumulator implements VariantProcessor.Accumulator<Ca
                 || (refAllele == 'C' && altAllele == 'T')
                 || (refAllele == 'T' && altAllele == 'C');
     }
-
 }

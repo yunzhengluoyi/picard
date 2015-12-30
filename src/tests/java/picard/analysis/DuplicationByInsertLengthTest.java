@@ -34,7 +34,7 @@ import java.io.IOException;
 /**
  * Created by hogstrom on 10/18/15.
  */
-public class LHDuplicationByInsertLengthTest extends CommandLineProgramTest {
+public class DuplicationByInsertLengthTest extends CommandLineProgramTest {
     private static final File TEST_DATA_DIR = new File("testdata/picard/sam/");
 
     public String getCommandLineProgramName() {

@@ -50,10 +50,7 @@ import java.util.List;
         usageShort = "Writes insert size counts for both duplate and non-duplate reads",
         programGroup = Metrics.class
 )
-public class DuplicationByInsertGcContent extends SinglePassSamProgram {
-
-    @Option(shortName="CHART", doc="A file (with .pdf extension) to write the chart to.")
-    public File CHART_OUTPUT;
+public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
 
     @Option(doc="If set to true, calculate mean quality over aligned reads only.")
     public boolean ALIGNED_READS_ONLY = false;
@@ -114,7 +111,7 @@ public class DuplicationByInsertGcContent extends SinglePassSamProgram {
         // calculate sliding cumulative GC count along reference contig
         void GetContigGCCumulativeSum (final SAMRecord rec, final ReferenceSequence ref1) {
             if (referenceIndex != rec.getReferenceIndex() || gc == -99) {
-                System.out.println("calculating ref i=" + rec.getReferenceIndex() + ", gc=" + gc);
+                System.out.println("calculating ref index i=" + rec.getReferenceIndex());
                 refBases = ref1.getBases();
                 StringUtil.toUpperCase(refBases);
                 final int refLength = refBases.length;
@@ -160,7 +157,7 @@ public class DuplicationByInsertGcContent extends SinglePassSamProgram {
 
     @Override
     protected void setup(final SAMFileHeader header, final File samFile) {
-        IOUtil.assertFileIsWritable(CHART_OUTPUT);
+        IOUtil.assertFileIsWritable(OUTPUT);
         // If we're working with a single library, assign that library's name
         // as a suffix to the plot title
     }
@@ -177,7 +174,6 @@ public class DuplicationByInsertGcContent extends SinglePassSamProgram {
     @Override
     protected void finish() {
         // Generate a "Histogram" of insert size length
-        System.out.println("test1");
         final MetricsFile<?,Integer> metrics = getMetricsFile();
         metrics.addHistogram(q.insertHistDup);
         metrics.addHistogram(q.insertHistNotDup);

@@ -66,11 +66,6 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
     private final HistogramGenerator q  = new HistogramGenerator(false);
 
     /** Required main method. */
-    /*public static void main(String[] args) {
-        System.exit(new MeanQualityByCycle().instanceMain(args));
-    }*/
-
-    /** Required main method. */
     public static void main(String[] args) {
         System.exit(new DuplicationByInsertLengthAndGC().instanceMain(args));
     }
@@ -85,17 +80,12 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
         }
 
         //will hold the relevant gc information per contig
-        // private int gc = -99;
-        // private int gcC = -1;
-        // private int referenceIndex = -1;
-        // private byte [] refBases = null;
-        // private java.util.ArrayList<int[]> gcCumCount = new java.util.ArrayList<int[]>();
         static int gc = -99;
         static int gcC = -1;
         static int referenceIndex = -1;
         static byte [] refBases = null;
         static java.util.ArrayList<int[]> gcCumCount = new java.util.ArrayList<int[]>();
-        static int nbinsGC = 15;
+        static int nbinsGC = 30;
         static int nbinsLength = 50;
         static int LengthMin = 1;
         static int LengthMax = 1001;
@@ -118,31 +108,40 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
                 boolean isPaired = rec.getProperPairFlag();
                 if (isForward && isPaired) {
                     int iSz = Math.abs(rec.getInferredInsertSize());
-                    if (iSz > LengthMax) {
+                    if (iSz >= LengthMax) {
                         nReadsOverMaxLength =+ 1; // skip read if insert length is loner than specified max
                     } else{
                         gc = GetReadGCContent(rec, ref1);
                         boolean isDup = rec.getDuplicateReadFlag();
-                        //                          //
-                        //  Place values in bins    //
-                        //                          //
                         //System.out.println(Arrays.toString(maxOfIntvalsLen));
+                        // set bin indices
                         int ibinLen = (int) ((iSz - LengthMin) / binSizeLen);
-                        //System.out.println(iSz + " is in bin " + maxOfIntvalsLen[ibinLen]);
-                        int ibinGC = (int) Math.ceil( ((double) gc) / (binSizeGC * 100));
-                        //System.out.println("gc = " + gc);
-                        //System.out.println(" is in bin " + maxOfIntvalsGC[ibinGC]);
+                        int ibinGC = (int) Math.ceil( ((double) gc) / (binSizeGC * 100)) -1;
+                        if (ibinGC == -1) {
+                            ibinGC = 0; //if gc is content is zero set index to the first bin
+                        }
+                        if (ibinLen < 0 || ibinLen >= nbinsLength) {
+                            System.out.println(ibinLen + ", " + iSz );
+                            throw new ArrayIndexOutOfBoundsException("Length Array Index Out of Bounds");
+                        }
+                        if (ibinGC < 0 || ibinGC >= nbinsGC) {
+                            System.out.println(ibinGC + ", " + gc );
+                            throw new ArrayIndexOutOfBoundsException("GC Array Index Out of Bounds");
+                        }
+                        // System.out.println("gc = " + gc);
+                        // System.out.println(" is in bin " + maxOfIntvalsGC[ibinGC]);
+                        // System.out.println(iSz + " is in bin " + maxOfIntvalsLen[ibinLen]);
                         // add entry to result matrix
                         if (isDup) {
                             nonOptDupMtrx[ibinLen][ibinGC] += 1;
                         } else {
                             uniqueMtrx[ibinLen][ibinGC] += 1;
                         }
-                        // place gc values in histogram
-                        // if (isDup) {
-                        //     insertHistDup.increment(Math.abs(gc));
-                        // } else {
-                        //     insertHistNotDup.increment(Math.abs(gc));
+                        // if (isDup){
+                        //     insertHistDup.increment(gc);
+                        // }
+                        // else {
+                        //     insertHistNotDup.increment(gc);
                         // }
                     }
                 }
@@ -241,16 +240,32 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
               // write unique reads result matrix
               outputWriter.write("(insert size x insert GC) matrix - Unique reads observed");
               outputWriter.newLine();
+              outputWriter.write("-,");
+              outputWriter.write(Arrays.toString(maxOfIntvalsGC)
+                        .replace("[","")
+                        .replace("]",""));
+              outputWriter.newLine();
               for (int i = 0; i < uniqueMtrx.length; i++) {
-                outputWriter.write(Arrays.toString(uniqueMtrx[i]));
+                outputWriter.write(maxOfIntvalsLen[i] + ", ");
+                outputWriter.write(Arrays.toString(uniqueMtrx[i])
+                        .replace("[","")
+                        .replace("]",""));
                 outputWriter.newLine();
               }
               // write duplicate reads result matrix
               outputWriter.newLine();
               outputWriter.write("(insert size x insert GC) matrix - duplicate reads observed");
               outputWriter.newLine();
+              outputWriter.write("-,");
+              outputWriter.write(Arrays.toString(maxOfIntvalsGC)
+                        .replace("[","")
+                        .replace("]",""));
+              outputWriter.newLine();
               for (int i = 0; i < uniqueMtrx.length; i++) {
-                outputWriter.write(Arrays.toString(nonOptDupMtrx[i]));
+                outputWriter.write(maxOfIntvalsLen[i] + ", ");
+                outputWriter.write(Arrays.toString(nonOptDupMtrx[i])
+                        .replace("[","")
+                        .replace("]",""));
                 outputWriter.newLine();
               }
               outputWriter.flush();  
@@ -259,33 +274,13 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
                 System.out.println("problem writing result matrix");
           }
         }
-
-        // public void writeMatricesToFile (String filename) {
-        //     System.out.println(filename);
-        //     // FileOutputStream fStream = new FileOutputStream(filename);
-        //     // //ObjectOutputStream outputStream = new ObjectOutputStream(new FileOutputStream(filename));
-        //     // ObjectOutputStream outputStream = new ObjectOutputStream(fStream);
-        //     // outputStream.writeObject(uniqueMtrx);
-        //     try {
-        //         FileOutputStream fStream = new FileOutputStream(filename);
-        //         ObjectOutputStream outputStream = new ObjectOutputStream(fStream);
-        //         outputStream.writeObject(uniqueMtrx);
-        //     } catch (final IOException e) {
-        //         System.out.println("problem writting result matrix");
-        //     }
-        //   // for (int i = 0; i < uniqueMtrx.length; i++) {
-        //   //   outputWriter.write(Arrays.toString(uniqueMtrx[i]));
-        //   //   outputWriter.newLine();
-            
-        //   // }
-        // }
-
     }
 
     @Override
     protected void setup(final SAMFileHeader header, final File samFile) {
         IOUtil.assertFileIsWritable(OUTPUT);
         q.GetMaxIntervalValues();
+        //q.printResultMtrx();
     }
 
     @Override

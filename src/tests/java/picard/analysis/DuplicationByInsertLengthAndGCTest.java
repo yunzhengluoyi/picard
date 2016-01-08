@@ -114,7 +114,7 @@ public class DuplicationByInsertLengthAndGCTest extends CommandLineProgramTest {
         builder.addPair("pair4", sequenceIndex, 1, 365);
         builder.addPair("pair5", sequenceIndex, 1, 1002); //long reads should not be counted if over max
 
-        final File samFile = File.createTempFile("tmp.collectRnaSeqMetrics.", ".sam");
+        final File samFile = File.createTempFile("tmp.DuplicationByInsertLengthAndGC.", ".sam");
         //samFile.deleteOnExit();
         System.out.println("sam file = " + samFile.getAbsolutePath());
 
@@ -123,7 +123,9 @@ public class DuplicationByInsertLengthAndGCTest extends CommandLineProgramTest {
         samWriter.close();
 
         // Generate the metrics.
-        final File outfile = File.createTempFile("test2", ".insert_GC_by_dup");
+        final File outfile = File.createTempFile("test", ".GC_Length_count_matrices");
+        final File outfileGc = File.createTempFile("test", ".insert_GC_by_dup");
+        final File outfileLen = File.createTempFile("test", ".insert_Length_by_dup");
         //metricsFile.deleteOnExit();
 
         //final File ref = new File("testdata/picard/quality/chrM.reference.fasta");
@@ -131,6 +133,8 @@ public class DuplicationByInsertLengthAndGCTest extends CommandLineProgramTest {
         final String[] args = new String[]{
                 "INPUT=" + samFile.getAbsolutePath(),
                 "OUTPUT=" + outfile.getAbsolutePath(),
+                "OUTPUT_GC_HIST=" + outfileGc.getAbsolutePath(),
+                "OUTPUT_LEN_HIST=" + outfileLen.getAbsolutePath(),
                 "REFERENCE_SEQUENCE=" + ref.getAbsolutePath(),
         };
 

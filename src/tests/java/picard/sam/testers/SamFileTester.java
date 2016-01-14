@@ -30,7 +30,8 @@ public abstract class SamFileTester extends CommandLineProgramTest {
     private File output;
     private int readNameCounter = 0;
     private boolean noMateCigars = false;
-    private boolean deleteOnExit = true;
+    //private boolean deleteOnExit = true;
+    private boolean deleteOnExit = false;
     private final ArrayList<String> args = new ArrayList<String>();
 
     public SamFileTester(final int readLength, final boolean deleteOnExit, final int defaultChromosomeLength, final ScoringStrategy duplicateScoringStrategy) {

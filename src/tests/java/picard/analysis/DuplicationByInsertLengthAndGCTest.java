@@ -32,17 +32,23 @@ import htsjdk.samtools.SAMRecordSetBuilder;
 import htsjdk.samtools.util.Interval;
 import htsjdk.samtools.util.IntervalList;
 import htsjdk.samtools.util.StringUtil;
+import htsjdk.samtools.util.Histogram;
+//import htsjdk.samtools.util.Histogram.Bin;
 import htsjdk.samtools.metrics.MetricsFile;
+
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
 import picard.cmdline.CommandLineProgramTest;
 import picard.annotation.RefFlatReader.RefFlatColumns;
+import picard.metrics.MultilevelMetrics;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Set;
+
 /**
  * Created by hogstrom on 10/18/15.
  */
@@ -139,6 +145,52 @@ public class DuplicationByInsertLengthAndGCTest extends CommandLineProgramTest {
         };
 
         Assert.assertEquals(runPicardCommandLine(args), 0);
+
+        //final MetricsFile<InsertSizeMetrics, Comparable<?>> outputGC = new MetricsFile<InsertSizeMetrics, Comparable<?>>();
+        final MetricsFile outputGC = new MetricsFile();
+        outputGC.read(new FileReader(outfileGc));
+
+        System.out.println("file = " + outfileGc.getAbsolutePath());
+        System.out.println("reported hist size = " + outputGC.getAllHistograms().size());
+        //System.out.println("reported mean bin size = " + outputGC.getAllHistograms()[0].getMeanBinSize());
+        System.out.println("reported mean bin size = " + outputGC.getHistogram().getMeanBinSize());
+        System.out.println("reported sum = " + outputGC.getHistogram().getSum());
+        System.out.println("reported sum of values = " + outputGC.getHistogram().getSumOfValues());
+        System.out.println("reported min bin = " + outputGC.getHistogram().getMin());
+        System.out.println("reported max bin = " + outputGC.getHistogram().getMax());
+        System.out.println("histogram valuelabel = " + outputGC.getHistogram().getValueLabel());
+        System.out.println("histogram binlabel = " + outputGC.getHistogram().getBinLabel());
+        System.out.println("histogram count = " + outputGC.getHistogram().getCount());
+
+        
+        Assert.assertEquals(outputGC.getAllHistograms().size(), 1);
+        final Histogram<Integer> gcHisto = outputGC.getHistogram();
+        Assert.assertEquals(gcHisto.getSumOfValues(), 4.0); // check that n reads were counted (long reads excluded)
+        Assert.assertEquals(gcHisto.getMin(), 0.0); // check that the insert with the lowest GC is 0
+
+        // Test expected values of GC bin Ids
+        final Set<Integer> keys = gcHisto.keySet();
+        //final java.util.ArrayList<int[]> keysArray = gcHisto.keySet().toArray();
+        final Object[] y = keys.toArray();
+        System.out.println("second i = " + y[2]);
+        for (final Integer bin : gcHisto.keySet()) {
+            final int binVal = (int) gcHisto.get(bin).getValue();
+            final int binId = (int) gcHisto.get(bin).getId();
+            if (binId == 0) {
+                Assert.assertEquals(binVal, 1);
+            }
+            if (binId == 25) {
+                Assert.assertEquals(binVal, 1);
+            } 
+            if (binId == 33) {
+                Assert.assertEquals(binVal, 1);
+            }
+            if (binId == 50) {
+                Assert.assertEquals(binVal, 1);
+            }
+        }
+
+
     }
 }
 

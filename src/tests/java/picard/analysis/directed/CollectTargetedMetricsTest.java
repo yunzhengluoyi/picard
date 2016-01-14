@@ -55,8 +55,8 @@ public class CollectTargetedMetricsTest extends CommandLineProgramTest {
         //Create Sam Files
         tempSamFile = File.createTempFile("CollectTargetedMetrics", ".bam", TEST_DIR);
         final File tempSamFileUnsorted = File.createTempFile("CollectTargetedMetrics", ".bam", TEST_DIR);
-        tempSamFileUnsorted.deleteOnExit();
-        tempSamFile.deleteOnExit();
+        //tempSamFileUnsorted.deleteOnExit();
+        //tempSamFile.deleteOnExit();
         final SAMFileHeader header = new SAMFileHeader();
 
         //Check that dictionary file is readable and then set header dictionary
@@ -116,8 +116,8 @@ public class CollectTargetedMetricsTest extends CommandLineProgramTest {
         //create output files for tests
         outfile = File.createTempFile("test", ".TargetedMetrics_Coverage");
         perTargetOutfile = File.createTempFile("perTarget", ".perTargetCoverage");
-        outfile.deleteOnExit();
-        perTargetOutfile.deleteOnExit();
+        //outfile.deleteOnExit();
+        //perTargetOutfile.deleteOnExit();
     }
 
     @DataProvider(name = "targetedIntervalDataProvider")

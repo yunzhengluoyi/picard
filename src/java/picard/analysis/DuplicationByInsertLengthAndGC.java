@@ -47,20 +47,32 @@ import java.util.List;
 import java.util.Arrays;
 
 /**
- * tabulate insert size counts for both duplate and non-duplate reads
+ * tabulate read pair counts according insert size and insert GC for both duplate and non-duplate reads
+ *
+ * @author Larson Hogstrom
  */
+
 @CommandLineProgramProperties(
         usage = " " +
                 " ",
-        usageShort = "Writes insert size counts for both duplate and non-duplate reads",
+        usageShort = "Writes insert size counts and insert GC for both duplate and non-duplate read pairs. Only " +
+        "the forward read of a read pair contributes to the final counts. Unmapped reads are not counted. " +
+        "multiple metrics files and and (GC x insert length) count matrices. Reads with an infered insert length  " +
+        "longer than 'LengthMax' will be ignored.",
         programGroup = Metrics.class
 )
 public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
 
-    @Option(doc="If set to true, calculate mean quality over aligned reads only.")
+    @Option(doc = "File to write the output to.")
+    public File OUTPUT_GC_HIST;
+
+    @Option(doc = "File to write the output to.")
+    public File OUTPUT_LEN_HIST;
+
+    @Option(doc="If set to true, calculate counts over aligned reads only.")
     public boolean ALIGNED_READS_ONLY = false;
 
-    @Option(doc="If set to true calculate mean quality over PF reads only.")
+    @Option(doc="If set to true calculate counts over PF reads only.")
     public boolean PF_READS_ONLY = false;
 
     private final HistogramGenerator q  = new HistogramGenerator(false);
@@ -72,8 +84,12 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
 
     private static class HistogramGenerator {
         final boolean useOriginalQualities;
-        Histogram<Integer> insertHistDup = new Histogram<Integer>("GC_content", "duplicate_read_counts");
-        Histogram<Integer> insertHistNotDup = new Histogram<Integer>("GC_content", "unique_read_counts");
+        // histograms for storing GC content of dups and non-dup reads
+        Histogram<Integer> insertGcHistDup = new Histogram<Integer>("GC_content", "duplicate_read_counts");
+        Histogram<Integer> insertGcHistNotDup = new Histogram<Integer>("GC_content", "unique_read_counts");
+        // histograms for storing insert length content for dups and non-dup reads
+        Histogram<Integer> insertLenHistDup = new Histogram<Integer>("Insert_length", "duplicate_reads");
+        Histogram<Integer> insertLenHistNotDup = new Histogram<Integer>("Insert_length", "unique_reads");
 
         private HistogramGenerator(final boolean useOriginalQualities) {
             this.useOriginalQualities = useOriginalQualities;
@@ -134,15 +150,13 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
                         // add entry to result matrix
                         if (isDup) {
                             nonOptDupMtrx[ibinLen][ibinGC] += 1;
+                            insertGcHistDup.increment(gc);
+                            insertLenHistDup.increment(iSz);
                         } else {
                             uniqueMtrx[ibinLen][ibinGC] += 1;
+                            insertGcHistNotDup.increment(gc);
+                            insertLenHistNotDup.increment(iSz);
                         }
-                        // if (isDup){
-                        //     insertHistDup.increment(gc);
-                        // }
-                        // else {
-                        //     insertHistNotDup.increment(gc);
-                        // }
                     }
                 }
             }
@@ -295,13 +309,17 @@ public class DuplicationByInsertLengthAndGC extends SinglePassSamProgram {
     @Override
     protected void finish() {
         // Generate a "Histogram" of insert size length
-        q.printResultMtrx();
+        //q.printResultMtrx();
         q.writeMatricesToFile(OUTPUT.getAbsolutePath());
-        System.out.println("number of reads over maxLength " + q.LengthMax + " bp: " + q.nReadsOverMaxLength);
-        // final MetricsFile<?,Integer> metrics = getMetricsFile();
-        // metrics.addHistogram(q.insertHistDup);
-        // metrics.addHistogram(q.insertHistNotDup);
-        // metrics.write(OUTPUT);
+        //System.out.println("number of reads over maxLength " + q.LengthMax + " bp: " + q.nReadsOverMaxLength);
+        final MetricsFile<?,Integer> metrics1 = getMetricsFile();
+        metrics1.addHistogram(q.insertGcHistDup);
+        metrics1.addHistogram(q.insertGcHistNotDup);
+        metrics1.write(OUTPUT_GC_HIST);
+        final MetricsFile<?,Integer> metrics2 = getMetricsFile();
+        metrics2.addHistogram(q.insertLenHistDup);
+        metrics2.addHistogram(q.insertLenHistNotDup); 
+        metrics2.write(OUTPUT_LEN_HIST);       
     }
 
 }

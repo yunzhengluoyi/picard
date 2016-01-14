@@ -22,6 +22,9 @@
  * THE SOFTWARE.
  */
 package picard.analysis;
+import picard.cmdline.CommandLineProgramTest;
+import picard.annotation.RefFlatReader.RefFlatColumns;
+import picard.metrics.MultilevelMetrics;
 
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFileWriter;
@@ -33,15 +36,10 @@ import htsjdk.samtools.util.Interval;
 import htsjdk.samtools.util.IntervalList;
 import htsjdk.samtools.util.StringUtil;
 import htsjdk.samtools.util.Histogram;
-//import htsjdk.samtools.util.Histogram.Bin;
 import htsjdk.samtools.metrics.MetricsFile;
-
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
-import picard.cmdline.CommandLineProgramTest;
-import picard.annotation.RefFlatReader.RefFlatColumns;
-import picard.metrics.MultilevelMetrics;
 
 import java.io.File;
 import java.io.FileReader;
@@ -59,57 +57,12 @@ public class DuplicationByInsertLengthAndGCTest extends CommandLineProgramTest {
         return DuplicationByInsertLengthAndGC.class.getSimpleName();
     }
 
-    // @Test
-    // public void testGCcontent() throws IOException {
-    //     //final File input = new File(TEST_DATA_DIR, "insert_size_metrics_test.sam");
-    //     //final File ref = new File(TEST_DATA_DIR, "merger.fasta");
-    //     final File ref = new File("testdata/picard/quality/chrM.reference.fasta");
-    //     final File input = new File("testdata/picard/quality/chrMReadsDiffereingLengths.sam");
-    //     //final File ref = new File("/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta");
-    //     //final File input = new File(TEST_DATA_DIR, "test_chrm21_rg2.bam");
-    //     //final File ref = new File("testdata/picard/metrics/chrMNO.reference.fasta");
-    //     //final File input = new File("/Users/hogstrom/Documents/code/picard/testdata/picard/sam/CollectGcBiasMetrics/CollectGcBias6098159690966723109.bam");
-    //     final File outfile = File.createTempFile("test", ".insert_GC_by_dup");
-    //     final File pdf = File.createTempFile("test", ".pdf");
-    //     //outfile.deleteOnExit();
-    //     System.out.println("outfile = " +  outfile.getAbsolutePath());
-    //     pdf.deleteOnExit();
-    //     final String[] args = new String[]{
-    //             "INPUT=" + input.getAbsolutePath(),
-    //             "OUTPUT=" + outfile.getAbsolutePath(),
-    //             "REFERENCE_SEQUENCE=" + ref.getAbsolutePath(),
-    //     };
-    //     Assert.assertEquals(runPicardCommandLine(args), 0);
-    //     // final MetricsFile<InsertSizeMetrics, Comparable<?>> output = new MetricsFile<InsertSizeMetrics, Comparable<?>>();
-    //     // output.read(new FileReader(outfile));
-
-    //     // Assert.assertEquals(output.getAllHistograms().size(), 5);
-
-    //     // for (final InsertSizeMetrics metrics : output.getMetrics()) {
-    //     //     Assert.assertEquals(metrics.PAIR_ORIENTATION.name(), "FR");
-    //     //     if (metrics.LIBRARY == null) {  // SAMPLE or ALL_READS level
-    //     //         Assert.assertEquals((int) metrics.MEDIAN_INSERT_SIZE, 41);
-    //     //         Assert.assertEquals(metrics.MIN_INSERT_SIZE, 36);
-    //     //         Assert.assertEquals(metrics.MAX_INSERT_SIZE, 45);
-    //     //         Assert.assertEquals(metrics.READ_PAIRS, 13);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_10_PERCENT, 1);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_20_PERCENT, 1);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_30_PERCENT, 1);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_40_PERCENT, 7);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_50_PERCENT, 7);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_60_PERCENT, 7);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_70_PERCENT, 9);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_80_PERCENT, 11);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_90_PERCENT, 11);
-    //     //         Assert.assertEquals(metrics.WIDTH_OF_99_PERCENT, 11);
-    //     //     }
-    //     // }
-    // }
-
     @Test
     public void basic() throws Exception {
+        //                                                        //
+        //        Build SAM file to match GC test ref file        //
+        //                                                        //
         final SAMRecordSetBuilder builder = new SAMRecordSetBuilder(true, SAMFileHeader.SortOrder.coordinate);
-        // Set seed so that strandedness is consistent among runs.
         builder.setRandomSeed(0);
         //final String sequence = "chr1";
         //final int sequenceIndex = builder.getHeader().getSequenceIndex(sequence);
@@ -121,20 +74,21 @@ public class DuplicationByInsertLengthAndGCTest extends CommandLineProgramTest {
         builder.addPair("pair5", sequenceIndex, 1, 1002); //long reads should not be counted if over max
 
         final File samFile = File.createTempFile("tmp.DuplicationByInsertLengthAndGC.", ".sam");
-        //samFile.deleteOnExit();
-        System.out.println("sam file = " + samFile.getAbsolutePath());
-
+        samFile.deleteOnExit();
         final SAMFileWriter samWriter = new SAMFileWriterFactory().makeSAMWriter(builder.getHeader(), false, samFile);
         for (final SAMRecord rec: builder.getRecords()) samWriter.addAlignment(rec);
         samWriter.close();
 
-        // Generate the metrics.
+        //                                                       //
+        //      Generate the metric files and run command        //
+        //                                                       //
         final File outfile = File.createTempFile("test", ".GC_Length_count_matrices");
+        outfile.deleteOnExit();
         final File outfileGc = File.createTempFile("test", ".insert_GC_by_dup");
+        outfileGc.deleteOnExit();
         final File outfileLen = File.createTempFile("test", ".insert_Length_by_dup");
-        //metricsFile.deleteOnExit();
+        outfileLen.deleteOnExit();
 
-        //final File ref = new File("testdata/picard/quality/chrM.reference.fasta");
         final File ref = new File("testdata/picard/sam/GCcontentTest.fasta");
         final String[] args = new String[]{
                 "INPUT=" + samFile.getAbsolutePath(),
@@ -143,53 +97,55 @@ public class DuplicationByInsertLengthAndGCTest extends CommandLineProgramTest {
                 "OUTPUT_LEN_HIST=" + outfileLen.getAbsolutePath(),
                 "REFERENCE_SEQUENCE=" + ref.getAbsolutePath(),
         };
-
         Assert.assertEquals(runPicardCommandLine(args), 0);
 
-        //final MetricsFile<InsertSizeMetrics, Comparable<?>> outputGC = new MetricsFile<InsertSizeMetrics, Comparable<?>>();
+        //                                      //
+        //      Test GC Histogram values        //
+        //                                      //
         final MetricsFile outputGC = new MetricsFile();
         outputGC.read(new FileReader(outfileGc));
 
-        System.out.println("file = " + outfileGc.getAbsolutePath());
-        System.out.println("reported hist size = " + outputGC.getAllHistograms().size());
-        //System.out.println("reported mean bin size = " + outputGC.getAllHistograms()[0].getMeanBinSize());
-        System.out.println("reported mean bin size = " + outputGC.getHistogram().getMeanBinSize());
-        System.out.println("reported sum = " + outputGC.getHistogram().getSum());
-        System.out.println("reported sum of values = " + outputGC.getHistogram().getSumOfValues());
-        System.out.println("reported min bin = " + outputGC.getHistogram().getMin());
-        System.out.println("reported max bin = " + outputGC.getHistogram().getMax());
-        System.out.println("histogram valuelabel = " + outputGC.getHistogram().getValueLabel());
-        System.out.println("histogram binlabel = " + outputGC.getHistogram().getBinLabel());
-        System.out.println("histogram count = " + outputGC.getHistogram().getCount());
-
-        
+        // Test aspects of GC histogram
         Assert.assertEquals(outputGC.getAllHistograms().size(), 1);
         final Histogram<Integer> gcHisto = outputGC.getHistogram();
         Assert.assertEquals(gcHisto.getSumOfValues(), 4.0); // check that n reads were counted (long reads excluded)
         Assert.assertEquals(gcHisto.getMin(), 0.0); // check that the insert with the lowest GC is 0
 
         // Test expected values of GC bin Ids
-        final Set<Integer> keys = gcHisto.keySet();
-        //final java.util.ArrayList<int[]> keysArray = gcHisto.keySet().toArray();
-        final Object[] y = keys.toArray();
-        System.out.println("second i = " + y[2]);
-        for (final Integer bin : gcHisto.keySet()) {
-            final int binVal = (int) gcHisto.get(bin).getValue();
-            final int binId = (int) gcHisto.get(bin).getId();
-            if (binId == 0) {
-                Assert.assertEquals(binVal, 1);
-            }
-            if (binId == 25) {
-                Assert.assertEquals(binVal, 1);
-            } 
-            if (binId == 33) {
-                Assert.assertEquals(binVal, 1);
-            }
-            if (binId == 50) {
-                Assert.assertEquals(binVal, 1);
-            }
-        }
+        final Set<Integer> keySetGC = gcHisto.keySet();
+        final Object[] gcKeys = keySetGC.toArray();
+        Assert.assertEquals(gcHisto.get(gcKeys[0]).getId(), 0); // first GC bin = 0% 
+        Assert.assertEquals((int) gcHisto.get(gcKeys[0]).getValue(), 1); // should contain one value
+        Assert.assertEquals(gcHisto.get(gcKeys[1]).getId(), 25); // second GC bin = 25%
+        Assert.assertEquals((int) gcHisto.get(gcKeys[1]).getValue(), 1); // should contain one value
+        Assert.assertEquals(gcHisto.get(gcKeys[2]).getId(), 33); // third GC bin = 33%
+        Assert.assertEquals((int) gcHisto.get(gcKeys[2]).getValue(), 1); // should contain one value
+        Assert.assertEquals(gcHisto.get(gcKeys[3]).getId(), 50); // third GC bin = 50%
+        Assert.assertEquals((int) gcHisto.get(gcKeys[3]).getValue(), 1); // should contain one value
 
+        //                                      //
+        //     Test Length Histogram values     //
+        //                                      //
+        final MetricsFile outputLen = new MetricsFile();
+        outputLen.read(new FileReader(outfileLen));
+
+        // Test aspects of GC histogram
+        Assert.assertEquals(outputLen.getAllHistograms().size(), 1);
+        final Histogram<Integer> lenHisto = outputLen.getHistogram();
+        Assert.assertEquals(lenHisto.getSumOfValues(), 4.0); // check that n reads were counted (long reads excluded)
+        Assert.assertEquals( (int) lenHisto.getMin(), 100); // check that the insert with the lowest GC is 0
+
+        // Test expected values of GC bin Ids
+        final Set<Integer> lenKeysSet = lenHisto.keySet();
+        final Object[] lenKeys = lenKeysSet.toArray();
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[0]).getId(), 100); // first GC bin = 0% 
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[0]).getValue(), 1); // should contain one value
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[1]).getId(), 200); // second GC bin = 25%
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[1]).getValue(), 1); // should contain one value
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[2]).getId(), 300); // third GC bin = 33%
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[2]).getValue(), 1); // should contain one value
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[3]).getId(), 400); // third GC bin = 50%
+        Assert.assertEquals( (int) lenHisto.get(lenKeys[3]).getValue(), 1); // should contain one value
 
     }
 }

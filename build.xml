@@ -225,22 +225,22 @@
         <fail if="tests.failed" message="There were failed unit tests"/>
     </target>
 
-<target name="report-coverage" depends="test" description="Creates an HTML code coverage report">
-  <jacoco:report xmlns:jacoco="antlib:org.jacoco.ant">
-    <executiondata>
-        <file file="jacoco.data"/>
-    </executiondata>
-    <structure name="Picard">
-        <classfiles>
-            <fileset dir="classes"/>
-        </classfiles>
-        <sourcefiles encoding="UTF-8">
-            <fileset dir="src"/>
-        </sourcefiles>
-    </structure>
-    <html destdir="report"/>
-  </jacoco:report>
-</target>
+    <target name="report-coverage" depends="test" description="Creates an HTML code coverage report">
+      <jacoco:report xmlns:jacoco="antlib:org.jacoco.ant">
+        <executiondata>
+            <file file="jacoco.data"/>
+        </executiondata>
+        <structure name="Picard">
+            <classfiles>
+                <fileset dir="classes"/>
+            </classfiles>
+            <sourcefiles encoding="UTF-8">
+                <fileset dir="src"/>
+            </sourcefiles>
+        </structure>
+        <html destdir="report"/>
+      </jacoco:report>
+    </target>
 
     <target name="single-test"
             depends="compile, compile-tests"
@@ -499,17 +499,17 @@
 
     <target name="document-standard-options" depends="picard-jar">
         <sequential>
-            <!-- For Sourceforge project website -->
-            <mkdir dir="${command-line-html-dir}/program_usage"/>
+            <!--&lt;!&ndash; For Sourceforge project website &ndash;&gt;-->
+            <!--<mkdir dir="${command-line-html-dir}/program_usage"/>-->
 
-            <!-- Generate HTML for each command -->
-            <java classname="picard.cmdline.CreateHtmlDocForStandardOptions"
-                  output="${command-line-html-dir}/program_usage/standard-options.html"
-                  failonerror="true">
-                <classpath>
-                    <pathelement location="${dist}/picard.jar"/>
-                </classpath>
-            </java>
+            <!--&lt;!&ndash; Generate HTML for each command &ndash;&gt;-->
+            <!--<java classname="picard.cmdline.CreateHtmlDocForStandardOptions"-->
+                  <!--output="${command-line-html-dir}/program_usage/standard-options.html"-->
+                  <!--failonerror="true">-->
+                <!--<classpath>-->
+                    <!--<pathelement location="${dist}/picard.jar"/>-->
+                <!--</classpath>-->
+            <!--</java>-->
         </sequential>
     </target>
 
@@ -524,14 +524,14 @@
             <mkdir dir="${command-line-html-dir}/inc"/>
 
             <!-- Generate HTML for each command -->
-            <java classname="picard.cmdline.CreateHtmlDocForProgram"
+        <!--    <java classname="picard.cmdline.CreateHtmlDocForProgram"
                   output="${command-line-html-dir}/program_usage/@{title}.html"
                   failonerror="true">
                 <classpath>
                     <pathelement location="${dist}/picard.jar"/>
                 </classpath>
                 <arg value="@{main-class}"/>
-            </java>
+            </java> -->
 
             <!-- Generate links to each command -->
             <echo file="${command-line-html-dir}/inc/command-line-sidebar.html" append="true"

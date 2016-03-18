@@ -188,7 +188,7 @@ public class TheoreticalSensitivity {
         }
     }
 
-    public static double[] normalizeHistogram(final Histogram<Integer> histogram) {
+    public static double[] normalizeHistogram(final Histogram<? extends Comparable> histogram) {
         if (histogram == null) throw new PicardException("Histogram is null and cannot be normalized");
 
         final double histogramSumOfValues = histogram.getSumOfValues();

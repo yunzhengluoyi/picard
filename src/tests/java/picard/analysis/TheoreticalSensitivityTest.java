@@ -62,9 +62,9 @@ public class TheoreticalSensitivityTest {
     @Test
     public void testProportionsAboveThresholds() throws Exception {
         final List<ArrayList<Integer>> sums = new ArrayList<ArrayList<Integer>>();
-        sums.add(new ArrayList<Integer>(Arrays.asList(0,0,0)));
-        sums.add(new ArrayList<Integer>(Arrays.asList(10, 10)));
-        sums.add(new ArrayList<Integer>(Arrays.asList(5, 11, -2, 4)));
+        sums.add(new ArrayList<>(Arrays.asList(0, 0, 0)));
+        sums.add(new ArrayList<>(Arrays.asList(10, 10)));
+        sums.add(new ArrayList<>(Arrays.asList(5, 11, -2, 4)));
         final List<Double> thresholds = Arrays.asList(-1.0, 1.0, 6.0);
         Assert.assertEquals(sums.size(), 3);
         Assert.assertEquals(thresholds.size(), 3);
@@ -140,6 +140,31 @@ public class TheoreticalSensitivityTest {
         Assert.assertEquals(empiricalProportionWithinOneSigma, theoreticalProportionWithinOneSigma, 5*samplingStandardDeviationOfProportion);
     }
 
+    @DataProvider( name = "testSimpleDeterministicSensitivityData")
+    public Object[][] testSimpleDeterministicSensitivity(){
+        return new Object[][]{
+                new Object[]{.01},
+                new Object[]{.02},
+                new Object[]{.04},
+                new Object[]{.1},
+                new Object[]{.2}
+        };
+    }
+
+    @Test(dataProvider = "testSimpleDeterministicSensitivityData")
+    public void testSimpleDeterministicSensitivity(final double missing){
+        final double[] depth = new double[100];
+        depth[0] = missing;
+        depth[99] = 1 - missing;
+
+        final double[] quality = new double[60];
+        quality[59] = 1D;
+
+        Assert.assertEquals(TheoreticalSensitivity.hetSNPSensitivity(depth,quality,1000,3.5),1-missing,0.0001);
+
+    }
+
+
     //Put it all together for deterministic quality and depths
     @Test
     public void testDeterministicQualityAndDepth() throws Exception {
@@ -173,7 +198,7 @@ public class TheoreticalSensitivityTest {
     @Test
     public void testHetSensDistributions() throws Exception {
         //Expect theoretical sens to be close to .9617 for Solexa-332667
-        final double tolerance = 0.02;
+        final double tolerance = 0.002;
         final double expectedResult = .9617;
         final int maxDepth = 500;
         final double [] depthDistribution = new double[maxDepth+1];
@@ -211,13 +236,13 @@ public class TheoreticalSensitivityTest {
 
     @Test(dataProvider = "hetSensDataProvider")
     public void testHetSensTargeted(final double expected, final File metricsFile) throws Exception{
-        final double tolerance = 0.02;
+        final double tolerance = (1 - expected) / 20;
 
-        final MetricsFile Metrics = new MetricsFile();
-        Metrics.read(new FileReader(metricsFile));
-        final List<Histogram> histograms = Metrics.getAllHistograms();
-        final Histogram depthHistogram = histograms.get(0);
-        final Histogram qualityHistogram = histograms.get(1);
+        final MetricsFile metrics = new MetricsFile();
+        metrics.read(new FileReader(metricsFile));
+        final List<Histogram<? extends Comparable>> histograms = metrics.getAllHistograms();
+        final Histogram<? extends Comparable> depthHistogram = histograms.get(0);
+        final Histogram<? extends Comparable> qualityHistogram = histograms.get(1);
 
         final double [] depthDistribution = TheoreticalSensitivity.normalizeHistogram(depthHistogram);
         final double [] qualityDistribution = TheoreticalSensitivity.normalizeHistogram(qualityHistogram);

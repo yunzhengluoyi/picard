@@ -296,7 +296,7 @@ public class CollectWgsMetrics extends CommandLineProgram {
 
         protected final long[] histogramArray;
         private final long[] baseQHistogramArray;
-        private final long[] baseQHetSensHistogram;
+        private final long[] baseQHetSensArray;
 
         private long basesExcludedByBaseq = 0;
         private long basesExcludedByOverlap = 0;
@@ -306,7 +306,7 @@ public class CollectWgsMetrics extends CommandLineProgram {
         public WgsMetricsCollector(final int coverageCap) {
             histogramArray = new long[coverageCap + 1];
             baseQHistogramArray = new long[Byte.MAX_VALUE];
-            baseQHetSensHistogram = new long[Byte.MAX_VALUE];
+            baseQHetSensArray = new long[Byte.MAX_VALUE];
             this.coverageCap = coverageCap;
         }
 
@@ -317,9 +317,11 @@ public class CollectWgsMetrics extends CommandLineProgram {
             int pileupSize = 0;
             int pileupSizeForBaseQHetSens = 0;
             for (final SamLocusIterator.RecordAndOffset recs : info.getRecordAndPositions()) {
+
                 pileupSizeForBaseQHetSens++;
+                //This separate array (different from baseQHistogramArray) is required since it doesn't adhere to the filters below
                 if(pileupSizeForBaseQHetSens <= coverageCap) {
-                    baseQHetSensHistogram[recs.getRecord().getBaseQualities()[recs.getOffset()]]++;
+                    baseQHetSensArray[recs.getRecord().getBaseQualities()[recs.getOffset()]]++;
                 }
 
                 if (recs.getBaseQuality() < MINIMUM_BASE_QUALITY)                   { ++basesExcludedByBaseq;   continue; }
@@ -356,9 +358,7 @@ public class CollectWgsMetrics extends CommandLineProgram {
                 baseQHistogram.increment(i, baseQHistogramArray[i]);
             }
 
-            if (INCLUDE_BQ_HISTOGRAM) {
-                file.addHistogram(baseQHistogram);
-            }
+            file.addHistogram(baseQHistogram);
         }
 
         protected void addMetricsToFile(final MetricsFile<WgsMetrics, Integer> file,
@@ -376,7 +376,7 @@ public class CollectWgsMetrics extends CommandLineProgram {
 
         protected Histogram<Integer> getDepthHistogram() {
             final Histogram<Integer> depthHistogram = new Histogram<>("coverage", "count");
-            for (int i=0; i<histogramArray.length; ++i) {
+            for (int i = 0; i < histogramArray.length; ++i) {
                 depthHistogram.increment(i, histogramArray[i]);
             }
             return depthHistogram;
@@ -396,8 +396,8 @@ public class CollectWgsMetrics extends CommandLineProgram {
 
             // Haplotype caller uses 17 as a baseQ cut off, so we are too. Everything below 17 is squashed into the '0' bin.
             final int BASEQ_MIN_CUTOFF = 17;
-            for (int i=0; i<baseQHetSensHistogram.length; ++i) {
-                baseQHetHistogram.increment( i < BASEQ_MIN_CUTOFF ? 0 : i, baseQHetSensHistogram[i]);
+            for (int i = 0; i < baseQHetSensArray.length; ++i) {
+                baseQHetHistogram.increment(i < BASEQ_MIN_CUTOFF ? 0 : i, baseQHetSensArray[i]);
             }
 
             final WgsMetrics metrics = generateWgsMetrics();
@@ -438,10 +438,13 @@ public class CollectWgsMetrics extends CommandLineProgram {
             metrics.PCT_100X  = MathUtil.sum(histogramArray, 100, histogramArray.length) / (double) metrics.GENOME_TERRITORY;
 
             // Get Theoretical Het SNP Sensitivity
-            final double [] depthDoubleArray = TheoreticalSensitivity.normalizeHistogram(depthHistogram);
-            final double [] baseQDoubleArray = TheoreticalSensitivity.normalizeHistogram(baseQHetHistogram);
+            final double[] depthDoubleArray = TheoreticalSensitivity.normalizeHistogram(depthHistogram);
+            final double[] baseQDoubleArray = TheoreticalSensitivity.normalizeHistogram(baseQHetHistogram);
+            log.debug("normalized depth 0 probability = " + depthDoubleArray[0]+ "normalized BQ 0 probability = " + baseQDoubleArray[0]);
             metrics.HET_SNP_SENSITIVITY = TheoreticalSensitivity.hetSNPSensitivity(depthDoubleArray, baseQDoubleArray, SAMPLE_SIZE, LOG_ODDS_THRESHOLD);
-            metrics.HET_SNP_Q = QualityUtil.getPhredScoreFromErrorProbability((1-metrics.HET_SNP_SENSITIVITY));
+            log.debug("Resulting HET_SNP_SENSITIVITY = " + metrics.HET_SNP_SENSITIVITY);
+
+            metrics.HET_SNP_Q = QualityUtil.getPhredScoreFromErrorProbability((1 - metrics.HET_SNP_SENSITIVITY));
 
             return metrics;
         }

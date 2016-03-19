@@ -258,7 +258,7 @@ public class TheoreticalSensitivityTest {
     @Test
     public void testDeterministicQualityAndDepth() throws Exception {
         final double logOddsThreshold = 0.0;
-        final double tolerance = 0.01;
+        final double tolerance = 0.001;
         final int sampleSize = 1; //quality is deterministic, hence no sampling error
         for (int q = 5; q < 10; q++) {
             for (int n = 5; n < 10; n++) {

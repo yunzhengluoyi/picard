@@ -24,18 +24,34 @@
 
 package picard.analysis;
 
+import htsjdk.samtools.SAMException;
+import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMFileWriter;
+import htsjdk.samtools.SAMFileWriterFactory;
+import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMRecordSetBuilder;
+import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.samtools.SAMSequenceRecord;
 import htsjdk.samtools.metrics.MetricsFile;
+import htsjdk.samtools.reference.FastaSequenceFile;
+import htsjdk.samtools.reference.ReferenceSequence;
+import htsjdk.samtools.reference.ReferenceSequenceFile;
 import htsjdk.samtools.util.Histogram;
+import htsjdk.variant.utils.SAMSequenceDictionaryExtractor;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Arrays;
-import java.io.FileReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Scanner;
+import java.util.stream.Collectors;
 
 /**
  * Created by davidben on 5/18/15.
@@ -72,15 +88,15 @@ public class TheoreticalSensitivityTest {
         final List<ArrayList<Double>> proportions = TheoreticalSensitivity.proportionsAboveThresholds(sums, thresholds);
         Assert.assertEquals(proportions.size(), 3);
 
-        Assert.assertEquals(proportions.get(0).get(0), (double) 3/3);
-        Assert.assertEquals(proportions.get(0).get(1), (double) 0/3);
-        Assert.assertEquals(proportions.get(0).get(2), (double) 0/3);
-        Assert.assertEquals(proportions.get(1).get(0), (double) 2/2);
-        Assert.assertEquals(proportions.get(1).get(1), (double) 2/2);
-        Assert.assertEquals(proportions.get(1).get(2), (double) 2/2);
-        Assert.assertEquals(proportions.get(2).get(0), (double) 3/4);
-        Assert.assertEquals(proportions.get(2).get(1), (double) 3/4);
-        Assert.assertEquals(proportions.get(2).get(2), (double) 1/4);
+        Assert.assertEquals(proportions.get(0).get(0), (double) 3 / 3);
+        Assert.assertEquals(proportions.get(0).get(1), (double) 0 / 3);
+        Assert.assertEquals(proportions.get(0).get(2), (double) 0 / 3);
+        Assert.assertEquals(proportions.get(1).get(0), (double) 2 / 2);
+        Assert.assertEquals(proportions.get(1).get(1), (double) 2 / 2);
+        Assert.assertEquals(proportions.get(1).get(2), (double) 2 / 2);
+        Assert.assertEquals(proportions.get(2).get(0), (double) 3 / 4);
+        Assert.assertEquals(proportions.get(2).get(1), (double) 3 / 4);
+        Assert.assertEquals(proportions.get(2).get(2), (double) 1 / 4);
     }
 
     @Test
@@ -89,14 +105,14 @@ public class TheoreticalSensitivityTest {
         final double p = 0.5;
         final List<ArrayList<Double>> distribution = TheoreticalSensitivity.hetAltDepthDistribution(N);
 
-        for (int n = 0; n < N-1; n++) {
+        for (int n = 0; n < N - 1; n++) {
             for (int m = 0; m <= n; m++) {
                 //TODO: java has no built-in binomial coefficient when this is in hellbender, use apache commons
                 int binomialCoefficient = 1;
                 for (int i = n; i > (n - m); i--) binomialCoefficient *= i;
                 for (int i = m; i > 0; i--) binomialCoefficient /= i;
 
-                Assert.assertEquals(distribution.get(n).get(m), binomialCoefficient*Math.pow(p,n));
+                Assert.assertEquals(distribution.get(n).get(m), binomialCoefficient * Math.pow(p, n));
             }
         }
     }
@@ -135,13 +151,13 @@ public class TheoreticalSensitivityTest {
         //the proportion within one sigma for the normal distribution
         //hence whether any element falls within one sigma is a Bernoulli variable
         final double theoreticalProportionWithinOneSigma = 0.682689492;
-        final double samplingStandardDeviationOfProportion = Math.sqrt(theoreticalProportionWithinOneSigma*(1-theoreticalProportionWithinOneSigma) /  sampleSize);
+        final double samplingStandardDeviationOfProportion = Math.sqrt(theoreticalProportionWithinOneSigma * (1 - theoreticalProportionWithinOneSigma) / sampleSize);
 
-        Assert.assertEquals(empiricalProportionWithinOneSigma, theoreticalProportionWithinOneSigma, 5*samplingStandardDeviationOfProportion);
+        Assert.assertEquals(empiricalProportionWithinOneSigma, theoreticalProportionWithinOneSigma, 5 * samplingStandardDeviationOfProportion);
     }
 
-    @DataProvider( name = "testSimpleDeterministicSensitivityData")
-    public Object[][] testSimpleDeterministicSensitivity(){
+    @DataProvider(name = "testSimpleDeterministicSensitivityData")
+    public Object[][] testSimpleDeterministicSensitivity() {
         return new Object[][]{
                 new Object[]{.01},
                 new Object[]{.02},
@@ -152,7 +168,7 @@ public class TheoreticalSensitivityTest {
     }
 
     @Test(dataProvider = "testSimpleDeterministicSensitivityData")
-    public void testSimpleDeterministicSensitivity(final double missing){
+    public void testSimpleDeterministicSensitivity(final double missing) {
         final double[] depth = new double[100];
         depth[0] = missing;
         depth[99] = 1 - missing;
@@ -160,34 +176,107 @@ public class TheoreticalSensitivityTest {
         final double[] quality = new double[60];
         quality[59] = 1D;
 
-        Assert.assertEquals(TheoreticalSensitivity.hetSNPSensitivity(depth,quality,1000,3.5),1-missing,0.0001);
+        Assert.assertEquals(TheoreticalSensitivity.hetSNPSensitivity(depth, quality, 1000, 3.5), 1 - missing, 0.0001);
 
     }
+
+    @Test
+    public void testSimpleSensitivityWithActualFile() {
+
+        File tinyReferenceSequenceFile = new File(TEST_DIR, "tiny.fasta");
+        ReferenceSequenceFile tinyReferenceSequence = new FastaSequenceFile(tinyReferenceSequenceFile, true);
+
+        final List<String> collect = tinyReferenceSequence.getSequenceDictionary().getSequences().
+                stream().map(SAMSequenceRecord::getSequenceName).collect(Collectors.toList());
+        String[] sequences = collect.toArray(new String[collect.size()]);
+
+        final SAMRecordSetBuilder builder = new SAMRecordSetBuilder(true, SAMFileHeader.SortOrder.coordinate, true, 1000, null, sequences);
+
+        SAMFileHeader header = new SAMFileHeader();
+        header.setSequenceDictionary(tinyReferenceSequence.getSequenceDictionary());
+        header.setSortOrder(SAMFileHeader.SortOrder.coordinate);
+        builder.setHeader(header);
+
+        //this should cover all of the first chromosome, leaving the second "naked"
+        builder.setReadLength(50);
+
+        SAMReadGroupRecord readGroupRecord = new SAMReadGroupRecord("fake");
+        readGroupRecord.setLibrary("test");
+        readGroupRecord.setPlatform(SAMReadGroupRecord.PlatformValue.ILLUMINA.name());
+        readGroupRecord.setSample("test_sample");
+        builder.setReadGroup(readGroupRecord);
+
+        for (Integer i = 0; i < 250; i++) {
+            builder.addFrag("read-"+i.toString(), 0, 1, false, false, null, null, 30);
+        }
+
+        final File sortedSam;
+        final File metricsFile;
+        try {
+            sortedSam = File.createTempFile("TheoreticalHetSensitivity", ".bam", TEST_DIR);
+            sortedSam.deleteOnExit();
+            File sortedIndex = new File(sortedSam.toString().replaceAll("bam$","bai"));
+            sortedIndex.deleteOnExit();
+
+
+            metricsFile = File.createTempFile("TheoreticalHetSensitivity", ".wgs_metrics", TEST_DIR);
+            metricsFile.deleteOnExit();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            Assert.assertTrue(false, "failed to create temporary file!");
+            return;
+        }
+
+        try (final SAMFileWriter writer = new SAMFileWriterFactory().setCreateIndex(true).makeBAMWriter(builder.getHeader(), false, sortedSam)) {
+            for (final SAMRecord record : builder) {
+                writer.addAlignment(record);
+            }
+        }
+
+        CollectWgsMetrics collectWgsMetrics = new CollectWgsMetrics();
+
+        collectWgsMetrics.COUNT_UNPAIRED = true;
+        collectWgsMetrics.INPUT = sortedSam;
+        collectWgsMetrics.OUTPUT = metricsFile;
+        collectWgsMetrics.REFERENCE_SEQUENCE = tinyReferenceSequenceFile;
+        collectWgsMetrics.doWork();
+
+        final MetricsFile<CollectWgsMetrics.WgsMetrics, ?> metrics = new MetricsFile<>();
+        try {
+            metrics.read(new FileReader(metricsFile));
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+        //50 bases are covered in chr1 and all 50 bases in chr2 are not, however 4 bases in chr2 are N's which do not count.
+        Assert.assertEquals(metrics.getMetrics().get(0).HET_SNP_SENSITIVITY, 50D/(100-4), 0.00001);
+    }
+
 
 
     //Put it all together for deterministic quality and depths
     @Test
     public void testDeterministicQualityAndDepth() throws Exception {
         final double logOddsThreshold = 0.0;
-        final double tolerance = 0.001;
+        final double tolerance = 0.01;
         final int sampleSize = 1; //quality is deterministic, hence no sampling error
         for (int q = 5; q < 10; q++) {
             for (int n = 5; n < 10; n++) {
-                final double minAltCount = 10*n*Math.log10(2)/q;  //alts required to call when log odds ratio threshold = 1
+                final double minAltCount = 10 * n * Math.log10(2) / q;  //alts required to call when log odds ratio threshold = 1
                 double expectedResult = 0.0;
 
-                final List<ArrayList<Double>> altCountProbabilities = TheoreticalSensitivity.hetAltDepthDistribution(n+1);
+                final List<ArrayList<Double>> altCountProbabilities = TheoreticalSensitivity.hetAltDepthDistribution(n + 1);
                 for (int altCount = n; altCount > minAltCount; altCount--) {
                     expectedResult += altCountProbabilities.get(n).get(altCount);
                 }
 
                 //deterministic weights that always yield q are 0.0 for 0 through q - 1 and 1.0 for q
-                final double[] qualityDistribution = new double[q+1];
+                final double[] qualityDistribution = new double[q + 1];
                 Arrays.fill(qualityDistribution, 0L);
-                qualityDistribution[qualityDistribution.length-1]=1L;
-                final double[] depthDistribution = new double[n+1];
+                qualityDistribution[qualityDistribution.length - 1] = 1L;
+                final double[] depthDistribution = new double[n + 1];
                 Arrays.fill(depthDistribution, 0L);
-                depthDistribution[depthDistribution.length-1]=1L;
+                depthDistribution[depthDistribution.length - 1] = 1L;
 
                 final double result = TheoreticalSensitivity.hetSNPSensitivity(depthDistribution, qualityDistribution, sampleSize, logOddsThreshold);
                 Assert.assertEquals(result, expectedResult, tolerance);
@@ -198,11 +287,11 @@ public class TheoreticalSensitivityTest {
     @Test
     public void testHetSensDistributions() throws Exception {
         //Expect theoretical sens to be close to .9617 for Solexa-332667
-        final double tolerance = 0.002;
+        final double tolerance = 0.02;
         final double expectedResult = .9617;
         final int maxDepth = 500;
-        final double [] depthDistribution = new double[maxDepth+1];
-        final double [] qualityDistribution = new double[50];
+        final double[] depthDistribution = new double[maxDepth + 1];
+        final double[] qualityDistribution = new double[50];
 
         final Scanner scanDepth = new Scanner(DEPTH);
         for (int i = 0; scanDepth.hasNextDouble(); i++) {
@@ -226,7 +315,7 @@ public class TheoreticalSensitivityTest {
         final File targetedMetricsFile = new File(TEST_DIR, "test_25103070136.targeted_pcr_metrics");
         final File wgsSampledMetricsFile = new File(TEST_DIR, "test_Solexa-316269_sampled.wgs_metrics");
 
-        return new Object[][] {
+        return new Object[][]{
                 {.9130, wgsMetricsFile},
                 {.9784, hsMetricsFile},
                 {.9562, targetedMetricsFile},
@@ -235,19 +324,19 @@ public class TheoreticalSensitivityTest {
     }
 
     @Test(dataProvider = "hetSensDataProvider")
-    public void testHetSensTargeted(final double expected, final File metricsFile) throws Exception{
-        final double tolerance = (1 - expected) / 20;
+    public void testHetSensTargeted(final double expected, final File metricsFile) throws Exception {
+        final double tolerance = (1 - expected) *0.2;
 
-        final MetricsFile metrics = new MetricsFile();
+        final MetricsFile<?,?> metrics = new MetricsFile();
         metrics.read(new FileReader(metricsFile));
-        final List<Histogram<? extends Comparable>> histograms = metrics.getAllHistograms();
+        final List<? extends Histogram<? extends Comparable>> histograms = metrics.getAllHistograms();
         final Histogram<? extends Comparable> depthHistogram = histograms.get(0);
         final Histogram<? extends Comparable> qualityHistogram = histograms.get(1);
 
-        final double [] depthDistribution = TheoreticalSensitivity.normalizeHistogram(depthHistogram);
-        final double [] qualityDistribution = TheoreticalSensitivity.normalizeHistogram(qualityHistogram);
+        final double[] depthDistribution = TheoreticalSensitivity.normalizeHistogram(depthHistogram);
+        final double[] qualityDistribution = TheoreticalSensitivity.normalizeHistogram(qualityHistogram);
 
-        final int sampleSize = 1000;
+        final int sampleSize = 10000;
         final double logOddsThreshold = 3.0;
 
         final double result = TheoreticalSensitivity.hetSNPSensitivity(depthDistribution, qualityDistribution, sampleSize, logOddsThreshold);

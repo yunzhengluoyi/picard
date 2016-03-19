@@ -440,7 +440,7 @@ public class CollectWgsMetrics extends CommandLineProgram {
             // Get Theoretical Het SNP Sensitivity
             final double[] depthDoubleArray = TheoreticalSensitivity.normalizeHistogram(depthHistogram);
             final double[] baseQDoubleArray = TheoreticalSensitivity.normalizeHistogram(baseQHetHistogram);
-            log.debug("normalized depth 0 probability = " + depthDoubleArray[0]+ "normalized BQ 0 probability = " + baseQDoubleArray[0]);
+            log.debug("normalized depth 0 probability = " + depthDoubleArray[0]+ ".\n normalized BQ 0 probability = " + baseQDoubleArray[0]);
             metrics.HET_SNP_SENSITIVITY = TheoreticalSensitivity.hetSNPSensitivity(depthDoubleArray, baseQDoubleArray, SAMPLE_SIZE, LOG_ODDS_THRESHOLD);
             log.debug("Resulting HET_SNP_SENSITIVITY = " + metrics.HET_SNP_SENSITIVITY);
 

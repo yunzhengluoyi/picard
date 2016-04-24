@@ -30,15 +30,15 @@ import org.testng.annotations.Test;
 /**
  * @author nhomer
  */
-public class SimpleMarkDuplicatesWithMateCigarTest extends AbstractMarkDuplicatesCommandLineProgramTest {
-    protected AbstractMarkDuplicatesCommandLineProgramTester getTester() {
-        return new SimpleMarkDuplicatesWithMateCigarTester();
-    }
+// public class SimpleMarkDuplicatesWithMateCigarTest extends AbstractMarkDuplicatesCommandLineProgramTest {
+//     protected AbstractMarkDuplicatesCommandLineProgramTester getTester() {
+//         return new SimpleMarkDuplicatesWithMateCigarTester();
+//     }
 
-    /** We require mate cigars for this tool */
-    @Test(expectedExceptions = SAMException.class)
-    @Override
-    public void testTwoMappedPairsWithSoftClippingFirstOfPairOnlyNoMateCigar() {
-        super.testTwoMappedPairsWithSoftClippingFirstOfPairOnlyNoMateCigar();
-    }
-}
+//     // * We require mate cigars for this tool 
+//     @Test(expectedExceptions = SAMException.class)
+//     @Override
+//     public void testTwoMappedPairsWithSoftClippingFirstOfPairOnlyNoMateCigar() {
+//         super.testTwoMappedPairsWithSoftClippingFirstOfPairOnlyNoMateCigar();
+//     }
+// }

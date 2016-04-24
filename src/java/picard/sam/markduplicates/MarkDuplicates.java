@@ -96,7 +96,10 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
     private SortingCollection<ReadEndsForMarkDuplicates> pairSort;
     private SortingCollection<ReadEndsForMarkDuplicates> fragSort;
     private SortingLongCollection duplicateIndexes;
+    private SortingLongCollection opticalDuplicateIndices;
     private int numDuplicateIndices = 0;
+    private int numOpticalDuplicateIndices = 0;
+    private ArrayList<Integer> duplicateSetSizes = new ArrayList<>();
 
     protected LibraryIdGenerator libraryIdGenerator = null; // this is initialized in buildSortedReadEndLists
 
@@ -229,6 +232,13 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
         reportMemoryStats("Before output close");
         out.close();
         reportMemoryStats("After output close");
+
+        //libraryIdGenerator.populateDuplicateSetSizeHist(this.duplicateSetSizes);
+        // print out pair duplicate set size
+        // System.out.println("duplicate set sizes");
+        // for (final Integer sizeInt : this.duplicateSetSizes) {
+        //     System.out.println("size: " + sizeInt);
+        // }
 
         // Write out the metrics
         finalizeAndWriteMetrics(libraryIdGenerator);
@@ -454,25 +464,43 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
         ReadEndsForMarkDuplicates firstOfNextChunk = null;
         final List<ReadEndsForMarkDuplicates> nextChunk = new ArrayList<ReadEndsForMarkDuplicates>(200);
 
+        // Print all of this.pairSort
+        // for (final ReadEndsForMarkDuplicates next : this.pairSort) {
+        //     System.out.println("Contents of pairSort read1ReferenceIndex = " + next.read1ReferenceIndex + ", y = " + next.y); //read1ReferenceIndex, read1IndexInFile
+        // }
+
         // First just do the pairs
         log.info("Traversing read pair information and detecting duplicates.");
         for (final ReadEndsForMarkDuplicates next : this.pairSort) {
             if (firstOfNextChunk == null) {
+                //System.out.println("first item read1ReferenceIndex = " + next.read1ReferenceIndex + ", y = " + next.y); //read1ReferenceIndex, read1IndexInFile
                 firstOfNextChunk = next;
-                nextChunk.add(firstOfNextChunk);
+                //nextChunk.add(firstOfNextChunk);
+                nextChunk.add(next);
             } else if (areComparableForDuplicates(firstOfNextChunk, next, true, useBarcodes)) {
+                //System.out.println("comparable item read1ReferenceIndex = " + next.read1ReferenceIndex + ", y = " + next.y); //read1ReferenceIndex, read1IndexInFile
                 nextChunk.add(next);
             } else {
                 if (nextChunk.size() > 1) {
+                    // System.out.println("internal markDuplicatePairs on current nextChunk");
+                    this.duplicateSetSizes.add(nextChunk.size()-1);  
                     markDuplicatePairs(nextChunk);
+                    //final boolean[] opticalDuplicateFlags = opticalDuplicateFinder.findOpticalDuplicates(nextChunk);
                 }
 
+                //System.out.println("clearing nextChunk and adding item read1ReferenceIndex = " + next.read1ReferenceIndex + ", y = " + next.y); //read1ReferenceIndex, read1IndexInFile
                 nextChunk.clear();
                 nextChunk.add(next);
                 firstOfNextChunk = next;
             }
         }
-        if (nextChunk.size() > 1) markDuplicatePairs(nextChunk);
+        // if (nextChunk.size() > 1) markDuplicatePairs(nextChunk);
+        if (nextChunk.size() > 1) {
+            markDuplicatePairs(nextChunk);
+            this.duplicateSetSizes.add(nextChunk.size()-1);  
+            //System.out.println("external markDuplicatePairs on current nextChunk"); //read1ReferenceIndex, read1IndexInFile
+            //System.out.println("nextChunk pair size: " + nextChunk.size());
+        }
         this.pairSort.cleanup();
         this.pairSort = null;
 
@@ -498,6 +526,8 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
                 containsFrags = !next.isPaired();
             }
         }
+        // System.out.println("nextChunk frag size: " + nextChunk.size());
+        // System.out.println("nextChunk frag conains pairs: " + containsPairs);
         markDuplicateFragments(nextChunk, containsPairs);
         this.fragSort.cleanup();
         this.fragSort = null;
@@ -536,6 +566,11 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
         ++this.numDuplicateIndices;
     }
 
+    private void addIndexAsOpticalDuplicate(final long bamIndex) {
+        this.opticalDuplicateIndices.add(bamIndex);
+        ++this.numOpticalDuplicateIndices;
+    }
+
     /**
      * Takes a list of ReadEndsForMarkDuplicates objects and removes from it all objects that should
      * not be marked as duplicates.  This assumes that the list contains objects representing pairs.
@@ -546,6 +581,16 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
         short maxScore = 0;
         ReadEndsForMarkDuplicates best = null;
 
+        // System.out.println("markDuplicatePairs list"); //read1ReferenceIndex, read1IndexInFile
+        // for (final ReadEndsForMarkDuplicates next : list) {
+        //     System.out.println("read1ReferenceIndex = " + next.read1ReferenceIndex + ", y = " + next.y); //read1ReferenceIndex, read1IndexInFile
+        // }
+
+        if (this.READ_NAME_REGEX != null) {
+            final boolean[] optDupStatus = AbstractMarkDuplicatesCommandLineProgram.trackOpticalDuplicates(list, opticalDuplicateFinder, libraryIdGenerator);
+        }
+
+
         /** All read ends should have orientation FF, FR, RF, or RR **/
         for (final ReadEndsForMarkDuplicates end : list) {
             if (end.score > maxScore || best == null) {
@@ -554,16 +599,25 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
             }
         }
 
-        for (final ReadEndsForMarkDuplicates end : list) {
+        // for (final ReadEndsForMarkDuplicates end : list) {
+        //     if (end != best) {
+        //         addIndexAsDuplicate(end.read1IndexInFile);
+        //         addIndexAsDuplicate(end.read2IndexInFile);
+        //     }
+        // }
+
+        for (int i = 0; i < list.size(); ++i) {
+            final ReadEndsForMarkDuplicates end = list.get(i);
             if (end != best) {
                 addIndexAsDuplicate(end.read1IndexInFile);
                 addIndexAsDuplicate(end.read2IndexInFile);
+                // if (this.READ_NAME_REGEX != null && ) {
+                //     addIndexAsOpticalDuplicate(end.read1IndexInFile);
+                //     addIndexAsOpticalDuplicate(end.read2IndexInFile);                    
+                // }
             }
         }
 
-        if (this.READ_NAME_REGEX != null) {
-            AbstractMarkDuplicatesCommandLineProgram.trackOpticalDuplicates(list, opticalDuplicateFinder, libraryIdGenerator);
-        }
     }
 
     /**

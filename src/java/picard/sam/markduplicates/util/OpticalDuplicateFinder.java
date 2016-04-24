@@ -168,7 +168,14 @@ public class OpticalDuplicateFinder {
      */
     public boolean[] findOpticalDuplicates(final List<? extends PhysicalLocation> list) {
         final int length = list.size();
+        // System.out.println("length of duplicate set: " + length);
         final boolean[] opticalDuplicateFlags = new boolean[length];
+
+        // System.out.println("findOpticalDuplicates list"); //read1ReferenceIndex, read1IndexInFile
+        // for (int i = 0; i < length; ++i) {
+        //     final PhysicalLocation lhs = list.get(i);
+        //     System.out.println("first read examined, i=" +i +", y=" + lhs.getY());
+        // }
 
         Collections.sort(list, new Comparator<PhysicalLocation>() {
             public int compare(final PhysicalLocation lhs, final PhysicalLocation rhs) {
@@ -180,13 +187,16 @@ public class OpticalDuplicateFinder {
             }
         });
 
+        // System.out.println("findOpticalDuplicates list"); //read1ReferenceIndex, read1IndexInFile
         outer:
         for (int i = 0; i < length; ++i) {
             final PhysicalLocation lhs = list.get(i);
+            // System.out.println("first read examined, i=" +i +", y=" + lhs.getY());
             if (lhs.getTile() < 0) continue;
 
             for (int j = i + 1; j < length; ++j) {
                 final PhysicalLocation rhs = list.get(j);
+                // System.out.println("second read examined: " + rhs.getY()+", rg=" + rhs.getReadGroup());
 
                 if (opticalDuplicateFlags[j]) continue;
                 if (lhs.getReadGroup() != rhs.getReadGroup()) continue outer;
@@ -194,6 +204,7 @@ public class OpticalDuplicateFinder {
                 if (rhs.getX() > lhs.getX() + this.opticalDuplicatePixelDistance) continue outer;
 
                 if (Math.abs(lhs.getY() - rhs.getY()) <= this.opticalDuplicatePixelDistance) {
+                    // System.out.println("read marked as optDup: " + rhs.getY());
                     opticalDuplicateFlags[j] = true;
                 }
             }

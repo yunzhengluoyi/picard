@@ -24,103 +24,33 @@
 
 package picard.sam.markduplicates;
 
-import htsjdk.samtools.DuplicateScoringStrategy.ScoringStrategy;
-import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMRecord;
-import htsjdk.samtools.SAMRecordSetBuilder;
 import htsjdk.samtools.SamReader;
 import htsjdk.samtools.SamReaderFactory;
 import htsjdk.samtools.metrics.MetricsFile;
-import htsjdk.samtools.util.CloseableIterator;
 import htsjdk.samtools.util.CloserUtil;
-import htsjdk.samtools.util.FormatUtil;
+import htsjdk.samtools.util.Histogram;
 import htsjdk.samtools.util.TestUtil;
 import org.testng.Assert;
 import picard.cmdline.CommandLineProgram;
 import picard.sam.DuplicationMetrics;
-import picard.sam.testers.SamFileTester;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.util.*;
 
 /**
- * This class is an extension of SamFileTester used to test AbstractMarkDuplicatesCommandLineProgram's with SAM files generated on the fly.
- * This performs the underlying tests defined by classes such as AbstractMarkDuplicatesCommandLineProgramTest.
+ * This class is an extension of AbstractMarkDuplicatesCommandLineProgramTester used to test MarkDuplicatesWithMateCigar with SAM files generated on the fly.
+ * This performs the underlying tests defined by classes such as see AbstractMarkDuplicatesCommandLineProgramTest and MarkDuplicatesWithMateCigarTest.
  */
-abstract public class AbstractMarkDuplicatesCommandLineProgramTester extends SamFileTester {
+public class MarkDuplicatesSetSizeHistogramTester extends AbstractMarkDuplicatesCommandLineProgramTester {
 
-    final public File metricsFile;
-    final DuplicationMetrics expectedMetrics;
+    final public Map<List<String>, Double> expectedSetSizeMap = new HashMap<>(); // key=(Histogram Label, histogram bin), value=histogram entry
 
-    public AbstractMarkDuplicatesCommandLineProgramTester(final ScoringStrategy duplicateScoringStrategy, SAMFileHeader.SortOrder sortOrder) {
-        this(duplicateScoringStrategy, sortOrder, true);
-    }
-
-    public AbstractMarkDuplicatesCommandLineProgramTester(final ScoringStrategy duplicateScoringStrategy, SAMFileHeader.SortOrder sortOrder, boolean recordNeedSorting) {
-        super(50, true, SAMRecordSetBuilder.DEFAULT_CHROMOSOME_LENGTH, duplicateScoringStrategy, sortOrder, recordNeedSorting);
-
-        expectedMetrics = new DuplicationMetrics();
-        expectedMetrics.READ_PAIR_OPTICAL_DUPLICATES = 0;
-
-        metricsFile = new File(getOutputDir(), "metrics.txt");
-        addArg("METRICS_FILE=" + metricsFile);
-        addArg("DUPLICATE_SCORING_STRATEGY=" + duplicateScoringStrategy.name());
-    }
-
-    public AbstractMarkDuplicatesCommandLineProgramTester(final ScoringStrategy duplicateScoringStrategy) {
-        this(duplicateScoringStrategy, SAMFileHeader.SortOrder.coordinate);
-    }
-
-    public AbstractMarkDuplicatesCommandLineProgramTester() {
-        this(SAMRecordSetBuilder.DEFAULT_DUPLICATE_SCORING_STRATEGY);
-    }
+    public MarkDuplicatesSetSizeHistogramTester() {}
 
     @Override
-    public String getCommandLineProgramName() { return getProgram().getClass().getSimpleName(); }
-
-    /**
-     * Fill in expected duplication metrics directly from the input records given to this tester
-     */
-    public void updateExpectedDuplicationMetrics() {
-
-        final FormatUtil formatter = new FormatUtil();
-
-        final CloseableIterator<SAMRecord> inputRecordIterator = this.getRecordIterator();
-        while (inputRecordIterator.hasNext()) {
-            final SAMRecord record = inputRecordIterator.next();
-            if (record.isSecondaryOrSupplementary()) {
-                ++expectedMetrics.SECONDARY_OR_SUPPLEMENTARY_RDS;
-            } else {
-                final String key = samRecordToDuplicatesFlagsKey(record);
-                if (!this.duplicateFlags.containsKey(key)) {
-                    System.err.println("DOES NOT CONTAIN KEY: " + key);
-                }
-                final boolean isDuplicate = this.duplicateFlags.get(key);
-
-                // First bring the simple metricsFile up to date
-                if (record.getReadUnmappedFlag()) {
-                    ++expectedMetrics.UNMAPPED_READS;
-                } else if (!record.getReadPairedFlag() || record.getMateUnmappedFlag()) {
-                    ++expectedMetrics.UNPAIRED_READS_EXAMINED;
-                    if (isDuplicate) ++expectedMetrics.UNPAIRED_READ_DUPLICATES;
-                } else {
-                    ++expectedMetrics.READ_PAIRS_EXAMINED; // will need to be divided by 2 at the end
-                    if (isDuplicate) ++expectedMetrics.READ_PAIR_DUPLICATES; // will need to be divided by 2 at the end
-                }
-            }
-        }
-        expectedMetrics.READ_PAIR_DUPLICATES = expectedMetrics.READ_PAIR_DUPLICATES / 2;
-        expectedMetrics.READ_PAIRS_EXAMINED = expectedMetrics.READ_PAIRS_EXAMINED / 2;
-        expectedMetrics.calculateDerivedMetrics();
-
-        // Have to run this Double value through the same format/parsing operations as during a file write/read
-        expectedMetrics.PERCENT_DUPLICATION = formatter.parseDouble(formatter.format(expectedMetrics.PERCENT_DUPLICATION));
-    }
-
-    public void setExpectedOpticalDuplicate(final int expectedOpticalDuplicatePairs) {
-        expectedMetrics.READ_PAIR_OPTICAL_DUPLICATES = expectedOpticalDuplicatePairs;
-    }
+    protected CommandLineProgram getProgram() { return new MarkDuplicates(); }
 
     @Override
     public void test() {
@@ -130,6 +60,7 @@ abstract public class AbstractMarkDuplicatesCommandLineProgramTester extends Sam
             // Read the output and check the duplicate flag
             int outputRecords = 0;
             final SamReader reader = SamReaderFactory.makeDefault().open(getOutput());
+            System.out.println(getOutput().getAbsolutePath());
             for (final SAMRecord record : reader) {
                 outputRecords++;
                 final String key = samRecordToDuplicatesFlagsKey(record);
@@ -151,7 +82,7 @@ abstract public class AbstractMarkDuplicatesCommandLineProgramTester extends Sam
             Assert.assertEquals(outputRecords, this.getNumberOfRecords(), ("saw " + outputRecords + " output records, vs. " + this.getNumberOfRecords() + " input records"));
 
             // Check the values written to metrics.txt against our input expectations
-            final MetricsFile<DuplicationMetrics, Comparable<?>> metricsOutput = new MetricsFile<DuplicationMetrics, Comparable<?>>();
+            final MetricsFile<DuplicationMetrics, Double> metricsOutput = new MetricsFile<DuplicationMetrics, Double>();
             try{
                 metricsOutput.read(new FileReader(metricsFile));
             }
@@ -169,10 +100,27 @@ abstract public class AbstractMarkDuplicatesCommandLineProgramTester extends Sam
             Assert.assertEquals(observedMetrics.PERCENT_DUPLICATION, expectedMetrics.PERCENT_DUPLICATION, "PERCENT_DUPLICATION does not match expected");
             Assert.assertEquals(observedMetrics.ESTIMATED_LIBRARY_SIZE, expectedMetrics.ESTIMATED_LIBRARY_SIZE, "ESTIMATED_LIBRARY_SIZE does not match expected");
             Assert.assertEquals(observedMetrics.SECONDARY_OR_SUPPLEMENTARY_RDS, expectedMetrics.SECONDARY_OR_SUPPLEMENTARY_RDS, "SECONDARY_OR_SUPPLEMENTARY_RDS does not match expected");
+
+
+            // Check contents of set size bin against expected values //
+            for (final Histogram<Double> histo : metricsOutput.getAllHistograms()) {
+                String label = histo.getValueLabel();
+                for (Object bin :histo.keySet()) {
+                    String binStr = bin.toString();
+                    if (expectedSetSizeMap.containsKey(Arrays.asList(label,binStr))) {
+                        Histogram<Double>.Bin binValue = histo.get(bin);
+                        double actual = binValue.getValue();
+                        double expected = expectedSetSizeMap.get(Arrays.asList(label, binStr));
+                        Assert.assertEquals(actual, expected);
+                    }
+
+                }
+
+            }
+
         } finally {
             TestUtil.recursiveDelete(getOutputDir());
         }
     }
 
-    abstract protected CommandLineProgram getProgram();
 }

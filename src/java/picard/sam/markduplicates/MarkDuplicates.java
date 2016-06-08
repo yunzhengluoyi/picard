@@ -592,13 +592,19 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
             } else {
                 if (nextChunk.size() > 1) {
                     markDuplicatePairs(nextChunk);
+                } else if (nextChunk.size() ==1) {
+                    AbstractMarkDuplicatesCommandLineProgram.addSingletonToCount(libraryIdGenerator);
                 }
                 nextChunk.clear();
                 nextChunk.add(next);
                 firstOfNextChunk = next;
             }
         }
-        if (nextChunk.size() > 1) markDuplicatePairs(nextChunk);
+        if (nextChunk.size() > 1) {
+            markDuplicatePairs(nextChunk);
+        }  else if (nextChunk.size() ==1) {
+            AbstractMarkDuplicatesCommandLineProgram.addSingletonToCount(libraryIdGenerator);
+        }
         this.pairSort.cleanup();
         this.pairSort = null;
 

@@ -761,7 +761,7 @@ public class MarkDuplicates extends AbstractMarkDuplicatesCommandLineProgram {
         // for read name (for representative read name), add the last of the pair that was examined
         for (final ReadEndsForMarkDuplicates end : list) {
             addRepresentativeReadOfDuplicateSet(best.read1IndexInFile, list.size(), end.read1IndexInFile);
-            addRepresentativeReadOfDuplicateSet(best.read2IndexInFile, list.size(), end.read2IndexInFile);
+            addRepresentativeReadOfDuplicateSet(best.read1IndexInFile, list.size(), end.read2IndexInFile);
         }
     }
 

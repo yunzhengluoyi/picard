@@ -7,6 +7,7 @@ import htsjdk.tribble.index.IndexFactory;
 import htsjdk.tribble.readers.AsciiLineReader;
 import htsjdk.tribble.readers.LineIteratorImpl;
 import htsjdk.variant.vcf.VCFCodec;
+import org.apache.tools.ant.util.FileUtils;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 import picard.pedigree.Sex;
@@ -29,10 +30,11 @@ public class FindMendelianViolationsTest {
     @Test
     public void testFindMedelianViolations() throws IOException {
         final File vcfFile = new File(TEST_DATA_DIR, "NA12878.vcf");
+
         final File vcfIndexFile = new File(TEST_DATA_DIR, "NA12878.vcf.idx");
-        vcfIndexFile.deleteOnExit();
+        //vcfIndexFile.deleteOnExit();
         if (vcfIndexFile.exists()) {
-            System.err.println("Deleting " + vcfIndexFile);
+        //    System.err.println("Deleting " + vcfIndexFile);
             vcfIndexFile.delete();
         }
         IndexFactory.createDynamicIndex(vcfFile, new VCFCodec()).writeBasedOnFeatureFile(vcfFile);
@@ -119,6 +121,8 @@ public class FindMendelianViolationsTest {
         Assert.assertEquals(grep(violationsFAKE, Haploid_Denovo.name()), mv.NUM_HAPLOID_DENOVO);
         Assert.assertEquals(grep(violationsFAKE, Haploid_Other.name()), mv.NUM_HAPLOID_OTHER);
         Assert.assertEquals(grep(violationsFAKE, Other.name()), mv.NUM_OTHER);
+
+        TestUtil.recursiveDelete(directoryForViolations);
     }
 
     /** returns the number of lines in the file that contain a regular expression (decorated with "MV=" and

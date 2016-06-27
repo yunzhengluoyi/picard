@@ -37,10 +37,12 @@ import picard.vcf.processor.VariantProcessor;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author mccowan
@@ -54,13 +56,8 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
     private final int MIN_GQ;
     private final int MIN_DP;
     private final ProgressLogger logger;
-    private final Map<String, Collection<VariantContext>> familyToViolations;
+    private final MendelianViolationsByFamily familyToViolations;
 
-    /** Produces an empty defaulting map that defaults to an empty list of variant contexts.  */
-    private static Map<String, Collection<VariantContext>> makeDefaultingFamilyToViolationsMap() {
-        return new CollectionUtil.DefaultingMap<>(s -> new ArrayList<>(), true);
-    }
-    
     MendelianViolationDetector(final Set<String> skip_chroms, final Set<String> male_chroms, final Set<String> female_chroms,
                                final double min_het_fraction, final int min_gq, final int min_dp, final List<MendelianViolationMetrics> trios,
                                final List<Interval> parIntervals, final ProgressLogger logger) {
@@ -73,8 +70,8 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
         this.trios = trios;
         this.parIntervals = parIntervals;
         this.logger = logger;
-        familyToViolations = makeDefaultingFamilyToViolationsMap();
-    }
+        familyToViolations = new MendelianViolationsByFamily();
+        }
 
     /** A little enum to describe the different type of Mendelian violations possible at a bi-allelic site. */
     enum MendelianViolation {
@@ -97,6 +94,11 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
         }
     }
 
+    public final static String MENDELIAN_VIOLATION_KEY = "MV";
+    public final static String ORIGINAL_AC = "AC_Orig";
+    public final static String ORIGINAL_AF = "AF_Orig";
+    public final static String ORIGINAL_AN = "AN_Orig";
+
     @Override
     public void accumulate(final VariantContext ctx) {
         logger.record(ctx.getContig(), ctx.getStart());
@@ -107,14 +109,31 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
         // Skip anything a little too funky
         if (ctx.isFiltered()) return;
         if (!ctx.isVariant()) return;
-        if (!ctx.isSNP()) return;
-        if (!ctx.isBiallelic()) return;
         if (SKIP_CHROMS.contains(variantChrom)) return;
 
         for (final MendelianViolationMetrics trio : trios) {
             final Genotype momGt = ctx.getGenotype(trio.MOTHER);
             final Genotype dadGt = ctx.getGenotype(trio.FATHER);
             final Genotype kidGt = ctx.getGenotype(trio.OFFSPRING);
+
+            // if any genotype:
+            // - has a non-snp allele; or
+            // - lacks a reference allele
+            //
+            // then ignore this trio
+            if (CollectionUtil.makeList(momGt, dadGt, kidGt).stream().anyMatch(gt ->
+                    gt.isHetNonRef() ||
+                            gt.getAlleles().stream().anyMatch(a -> a.length() != 1 || a.isSymbolic()))) {
+                continue;
+            }
+
+            // if between the trio there are more than 2 alleles including the reference,
+            if (Stream.concat(
+                    Collections.singleton(ctx.getReference()).stream(),
+                    CollectionUtil.makeList(momGt, dadGt, kidGt)
+                            .stream()
+                            .flatMap(gt -> gt.getAlleles().stream()))
+                    .collect(Collectors.toSet()).size() > 2) continue;
 
             // Test to make sure:
             //   1) That the site is in fact variant in the trio
@@ -143,6 +162,7 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
                     haploid = true;
                     haploidParentalGenotype = momGt;
                 } else {
+                    // if sex is Sex.UNKNOWN (-9)
                     continue;
                 }
             }
@@ -220,15 +240,15 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
                 // Create a new Context subsetted to the three samples
                 final VariantContextBuilder builder = new VariantContextBuilder(ctx);
                 builder.genotypes(ctx.getGenotypes().subsetToSamples(CollectionUtil.makeSet(trio.MOTHER, trio.FATHER, trio.OFFSPRING)));
-                builder.attribute("MV", type.name());
+                builder.attribute(MENDELIAN_VIOLATION_KEY, type.name());
 
                 // Copy over some useful attributes from the full context
                 if (ctx.hasAttribute(VCFConstants.ALLELE_COUNT_KEY))
-                    builder.attribute("AC_Orig", ctx.getAttribute(VCFConstants.ALLELE_COUNT_KEY));
+                    builder.attribute(ORIGINAL_AC, ctx.getAttribute(VCFConstants.ALLELE_COUNT_KEY));
                 if (ctx.hasAttribute(VCFConstants.ALLELE_FREQUENCY_KEY))
-                    builder.attribute("AF_Orig", ctx.getAttribute(VCFConstants.ALLELE_FREQUENCY_KEY));
+                    builder.attribute(ORIGINAL_AF, ctx.getAttribute(VCFConstants.ALLELE_FREQUENCY_KEY));
                 if (ctx.hasAttribute(VCFConstants.ALLELE_NUMBER_KEY))
-                    builder.attribute("AN_Orig", ctx.getAttribute(VCFConstants.ALLELE_NUMBER_KEY));
+                    builder.attribute(ORIGINAL_AN, ctx.getAttribute(VCFConstants.ALLELE_NUMBER_KEY));
 
                 // Write out the variant record
                 familyToViolations.get(trio.FAMILY_ID).add(builder.make());
@@ -255,12 +275,8 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
         final Allele offAllele1 = off.getAllele(0);
         final Allele offAllele2 = off.getAllele(1);
 
-        for (final Allele a1 : p1.getAlleles()) {
-            for (final Allele a2 : p2.getAlleles()) {
-                if (a1.equals(offAllele1) && a2.equals(offAllele2)) return false;
-                if (a2.equals(offAllele1) && a1.equals(offAllele2)) return false;
-            }
-        }
+        if(p1.getAlleles().contains(offAllele1) && p2.getAlleles().contains(offAllele2)) return false;
+        if(p2.getAlleles().contains(offAllele1) && p1.getAlleles().contains(offAllele2)) return false;
 
         return true;
     }
@@ -272,16 +288,15 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
         for (final Interval par : parIntervals) {
             if (par.getContig().equals(chr) && pos >= par.getStart() && pos <= par.getEnd()) return true;
         }
-
         return false;
     }
 
     /** Represents the result of the work this class does. */
     static class Result {
         private final Collection<MendelianViolationMetrics> metrics;
-        private final Map<String, Collection<VariantContext>> violations;
+        private final MendelianViolationsByFamily violations;
 
-        Result(final Collection<MendelianViolationMetrics> metrics, final Map<String, Collection<VariantContext>> violations) {
+        Result(final Collection<MendelianViolationMetrics> metrics, final MendelianViolationsByFamily violations) {
             this.metrics = metrics;
             this.violations = violations;
         }
@@ -290,13 +305,14 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
             return metrics;
         }
 
-        Map<String, Collection<VariantContext>> violations() {
+
+        MendelianViolationsByFamily violations() {
             return violations;
         }
 
         public static MendelianViolationDetector.Result merge(final Collection<MendelianViolationDetector.Result> results) {
             final Collection<Collection<MendelianViolationMetrics>> metricCollections = new ArrayList<>();
-            final Collection<Map<String, Collection<VariantContext>>> violationCollections = new ArrayList<>();
+            final Collection<MendelianViolationsByFamily> violationCollections = new ArrayList<>();
             for (final MendelianViolationDetector.Result result : results) {
                 metricCollections.add(result.metrics());
                 violationCollections.add(result.violations());
@@ -305,8 +321,8 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
             return new MendelianViolationDetector.Result(mergeMetrics(metricCollections), mergeViolations(violationCollections));
         }
 
-        private static Map<String, Collection<VariantContext>> mergeViolations(final Collection<Map<String, Collection<VariantContext>>> resultsToReduce) {
-            final Map<String, Collection<VariantContext>> masterFamilyViolationsMap = makeDefaultingFamilyToViolationsMap();
+        private static MendelianViolationsByFamily mergeViolations(final Collection<MendelianViolationsByFamily> resultsToReduce) {
+            final MendelianViolationsByFamily masterFamilyViolationsMap = new MendelianViolationsByFamily();
             
             for (final Map<String, Collection<VariantContext>> childFamilyViolationsMap : resultsToReduce) {
                 for (final String childFamily : childFamilyViolationsMap.keySet()) {
@@ -335,4 +351,5 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
                     .collect(Collectors.<MendelianViolationMetrics, List<MendelianViolationMetrics>>toCollection(ArrayList<MendelianViolationMetrics>::new));
         }
     }
+
 }

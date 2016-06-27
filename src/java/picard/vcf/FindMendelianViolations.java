@@ -53,6 +53,7 @@ import picard.vcf.processor.VariantProcessor;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -83,7 +84,11 @@ import static htsjdk.variant.variantcontext.writer.Options.INDEX_ON_THE_FLY;
         usage = "Finds mendelian violations of all types within a VCF. " +
            "Takes in VCF or BCF and a pedigree file and looks for high confidence calls " +
            "where the genotype of the offspring is incompatible with the genotypes of the parents. " +
-                "Assumes the existence of format fields DP, GT, GQ, and PL fields, and will use AD if possible. "+
+                "Assumes the existence of format fields DP, GT, GQ, and PL fields, and will use AD if possible. " +
+                "\n" +
+                "Take note that the implementation assumes that reads from the PAR will be mapped to the female chromosome" +
+                "rather than the male. This requires that the PAR in the male chromosome be masked so that the aligner " +
+                "does this. This is normally done for the public releases of the human reference."+
                 "\n" +
                 "Usage example: java -jar picard.jar FindMendelianViolations I=input.vcf \\\n" +
                 "                 TRIO=family.ped \\\n" +
@@ -138,30 +143,30 @@ public class FindMendelianViolations extends CommandLineProgram {
     private final Log LOG = Log.getInstance(FindMendelianViolations.class);
     private final ProgressLogger progressLogger = new ProgressLogger(LOG, 10000, "variants analyzed");
 
-    private final Lazy<VCFHeader> inputHeader = new Lazy<>(new Lazy.LazyInitializer<VCFHeader>() {
-        @Override
-        public VCFHeader make() {
-            try (final VCFFileReader in = new VCFFileReader(INPUT)) {
-                return in.getFileHeader();
-            }
+    // The following two members are "lazy" since they need to wait until the commandline program populates
+    // the files from the arguments before they can be realized (while keeping them final)
+    private final Lazy<VCFHeader> inputHeader = new Lazy<>(
+            () -> {
+                try (final VCFFileReader in = new VCFFileReader(INPUT)) {
+                    return in.getFileHeader();
+                }
+            });
+
+    private final Lazy<PedFile> pedFile = new Lazy<>(()-> PedFile.fromFile(TRIOS, TAB_MODE));
+
+    private final Lazy<Set<Interval>> parIntervals = new Lazy<>(() -> Collections.unmodifiableSet(parseIntervalLists(PSEUDO_AUTOSOMAL_REGIONS)));
+
+    private Set<Interval> parseIntervalLists(final Set<String> intervalLists){
+        // Parse the PARs
+        final Set<Interval> intervals = new HashSet<>(intervalLists.size());
+        for (final String par : intervalLists) {
+            final String[] splits1 = par.split(":");
+            final String[] splits2 = splits1[1].split("-");
+            intervals.add(new Interval(splits1[0], Integer.parseInt(splits2[0]), Integer.parseInt(splits2[1])));
         }
-    });
-
-    private final Lazy<PedFile> pedFile = new Lazy<>(new Lazy.LazyInitializer<PedFile>() {
-        @Override
-        public PedFile make() {
-            return PedFile.fromFile(TRIOS, TAB_MODE);
-        }
-    });
-
-    private final List<Interval> parIntervals = new ArrayList<>();
-
-    // Stock main method.
-    public static void main(final String[] args) {
-        new FindMendelianViolations().instanceMainWithExit(args);
+        return intervals;
     }
-
-    /**
+     /**
      * Validates that the sex chromosomes don't overlap and parses the pseudo-autosomal regions into usable
      * objects to ensure their parsability
      *
@@ -176,17 +181,6 @@ public class FindMendelianViolations extends CommandLineProgram {
         sexChroms.addAll(FEMALE_CHROMS);
         sexChroms.retainAll(MALE_CHROMS);
         if (!sexChroms.isEmpty()) errors.add("The following chromosomes were listed as both male and female sex chromosomes: " + sexChroms);
-
-        // Parse the PARs
-        for (final String par : PSEUDO_AUTOSOMAL_REGIONS) {
-            try {
-                final String[] splits1 = par.split(":");
-                final String[] splits2 = splits1[1].split("-");
-                parIntervals.add(new Interval(splits1[0], Integer.parseInt(splits2[0]), Integer.parseInt(splits2[1])));
-            } catch (final Exception e) {
-                errors.add("Could not parse pseudo-autosomal region: " + par);
-            }
-        }
 
         if (errors.isEmpty()) return null;
         else return errors.toArray(new String[errors.size()]);
@@ -227,18 +221,22 @@ public class FindMendelianViolations extends CommandLineProgram {
         return 0;
     }
 
+
     private void writeAllViolations(final MendelianViolationDetector.Result result) {
         if (VCF_DIR != null) {
-            LOG.info(String.format("Writing family violation VCFs to %s...", VCF_DIR.getAbsolutePath()));
+            LOG.info(String.format("Writing family violation VCFs to %s/", VCF_DIR.getAbsolutePath()));
             final VariantContextComparator vcComparator = new VariantContextComparator(inputHeader.get().getContigLines());
             final Set<VCFHeaderLine> headerLines = new LinkedHashSet<>(inputHeader.get().getMetaDataInInputOrder());
-            headerLines.add(new VCFInfoHeaderLine("MV", 1, VCFHeaderLineType.String, "Type of mendelian violation."));
-            headerLines.add(new VCFInfoHeaderLine("AC_Orig", VCFHeaderLineCount.A, VCFHeaderLineType.Integer, "Original AC"));
-            headerLines.add(new VCFInfoHeaderLine("AF_Orig", VCFHeaderLineCount.A, VCFHeaderLineType.Float, "Original AF"));
-            headerLines.add(new VCFInfoHeaderLine("AN_Orig", 1, VCFHeaderLineType.Integer, "Original AN"));
+            headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.MENDELIAN_VIOLATION_KEY, 1, VCFHeaderLineType.String, "Type of mendelian violation."));
+            headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.ORIGINAL_AC, VCFHeaderLineCount.A, VCFHeaderLineType.Integer, "Original AC"));
+            headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.ORIGINAL_AF, VCFHeaderLineCount.A, VCFHeaderLineType.Float, "Original AF"));
+            headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.ORIGINAL_AN, 1, VCFHeaderLineType.Integer, "Original AN"));
             for (final PedFile.PedTrio trio : pedFile.get().values()) {
+                final File outputFile = new File(VCF_DIR, IOUtil.makeFileNameSafe(trio.getFamilyId() + ".vcf"));
+                LOG.info(String.format("Writing %s violation VCF to %s", trio.getFamilyId(), outputFile.getAbsolutePath()));
+
                 final VariantContextWriter out = new VariantContextWriterBuilder()
-                        .setOutputFile(new File(VCF_DIR, IOUtil.makeFileNameSafe(trio.getFamilyId() + ".vcf")))
+                        .setOutputFile(outputFile)
                         .unsetOption(INDEX_ON_THE_FLY)
                         .build();
 
@@ -261,7 +259,7 @@ public class FindMendelianViolations extends CommandLineProgram {
                 MIN_GQ,
                 MIN_DP,
                 generateTrioMetricsBase(),
-                ImmutableList.copyOf(parIntervals),
+                ImmutableList.copyOf(parIntervals.get()),
                 progressLogger
         );
     }

@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package picard.vcf;
+package picard.vcf.MendelianViolations;
 
 import htsjdk.samtools.util.CollectionUtil;
 import htsjdk.samtools.util.Interval;
@@ -123,11 +123,11 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
             // then ignore this trio
             if (CollectionUtil.makeList(momGt, dadGt, kidGt).stream().anyMatch(gt ->
                     gt.isHetNonRef() ||
-                            gt.getAlleles().stream().anyMatch(a -> a.length() != 1 || a.isSymbolic()))) {
+                            Stream.concat(Stream.of(ctx.getReference()), gt.getAlleles().stream()).anyMatch(a -> a.length() != 1 || a.isSymbolic()))) {
                 continue;
             }
 
-            // if between the trio there are more than 2 alleles including the reference,
+            // if between the trio there are more than 2 alleles including the reference, continue
             if (Stream.concat(
                     Collections.singleton(ctx.getReference()).stream(),
                     CollectionUtil.makeList(momGt, dadGt, kidGt)
@@ -142,7 +142,10 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
             if (kidGt.isHet()) {
                 final int[] ad = kidGt.getAD();
                 if (ad == null) continue;
-                final double minAlleleFraction = Math.min(ad[0], ad[1]) / (double) (ad[0] + ad[1]);
+
+                final List<Integer> adOfAlleles = kidGt.getAlleles().stream()
+                        .map(a->ad[ctx.getAlleleIndex(a)]).collect(Collectors.toList());
+                final double minAlleleFraction = Math.min(adOfAlleles.get(0), adOfAlleles.get(1)) / (double) (adOfAlleles.get(0) + adOfAlleles.get(1));
                 if (minAlleleFraction < MIN_HET_FRACTION) continue;
             }
 
@@ -153,17 +156,17 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
             boolean haploid = false;
             Genotype haploidParentalGenotype = null;
 
-            if (FEMALE_CHROMS.contains(variantChrom)) {
+            if (FEMALE_CHROMS.contains(variantChrom) && trio.OFFSPRING_SEX != Sex.Unknown) {
                 if (trio.OFFSPRING_SEX == Sex.Female) {
+                    // famale
                     haploid = false;
                 } else if (isInPseudoAutosomalRegion(variantChrom, variantPos)) {
+                    // male but in PAR on X, so diploid
                     haploid = false;
-                } else if (trio.OFFSPRING_SEX == Sex.Male) {
+                } else {
+                    // male, out of PAR on X, haploid
                     haploid = true;
                     haploidParentalGenotype = momGt;
-                } else {
-                    // if sex is Sex.UNKNOWN (-9)
-                    continue;
                 }
             }
 
@@ -184,15 +187,16 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
             // interesting.  We want to ensure that parents are always GQ>=MIN_GQ, and that the kid is either GQ>=MIN_GQ or in the
             // case where kid is het that the phred-scaled-likelihood of being reference is >=MIN_GQ.
             if (haploid && (haploidParentalGenotype.isNoCall() || haploidParentalGenotype.getGQ() < MIN_GQ)) continue;
-            if (!haploid && (momGt.isNoCall() || momGt.getGQ() < MIN_GQ || dadGt.isNoCall() || dadGt.getGQ() < MIN_GQ)) continue;
+            if (!haploid && (momGt.isNoCall() || momGt.getGQ() < MIN_GQ || dadGt.isNoCall() || dadGt.getGQ() < MIN_GQ))
+                continue;
             if (kidGt.isNoCall()) continue;
             if (momGt.isHomRef() && dadGt.isHomRef() && !kidGt.isHomRef()) {
                 if (kidGt.getPL()[0] < MIN_GQ) continue;
             } else if (kidGt.getGQ() < MIN_GQ) continue;
 
             // Also filter on the DP for each of the samples - it's possible to miss hets when DP is too low
-            if (haploid && ( kidGt.getDP() < MIN_DP || haploidParentalGenotype.getDP()<MIN_DP)) continue;
-            if (!haploid && ( kidGt.getDP() < MIN_DP || momGt.getDP() < MIN_DP || dadGt.getDP() < MIN_DP)) continue;
+            if (haploid && (kidGt.getDP() < MIN_DP || haploidParentalGenotype.getDP() < MIN_DP)) continue;
+            if (!haploid && (kidGt.getDP() < MIN_DP || momGt.getDP() < MIN_DP || dadGt.getDP() < MIN_DP)) continue;
 
             trio.NUM_VARIANT_SITES++;
 
@@ -351,5 +355,4 @@ class MendelianViolationDetector implements VariantProcessor.Accumulator<Mendeli
                     .collect(Collectors.<MendelianViolationMetrics, List<MendelianViolationMetrics>>toCollection(ArrayList<MendelianViolationMetrics>::new));
         }
     }
-
 }

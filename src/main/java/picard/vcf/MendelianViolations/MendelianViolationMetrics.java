@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package picard.vcf;
+package picard.vcf.MendelianViolations;
 
 import picard.analysis.replicates.MergeableMetricBase;
 import picard.pedigree.Sex;

@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package picard.vcf;
+package picard.vcf.MendelianViolations;
 
 import htsjdk.samtools.util.CollectionUtil;
 import htsjdk.variant.variantcontext.VariantContext;

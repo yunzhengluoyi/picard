@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package picard.vcf;
+package picard.vcf.MendelianViolations;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -84,11 +84,11 @@ import static htsjdk.variant.variantcontext.writer.Options.INDEX_ON_THE_FLY;
         usage = "Finds mendelian violations of all types within a VCF. " +
            "Takes in VCF or BCF and a pedigree file and looks for high confidence calls " +
            "where the genotype of the offspring is incompatible with the genotypes of the parents. " +
-                "Assumes the existence of format fields DP, GT, GQ, and PL fields, and will use AD if possible. " +
+                "Assumes the existence of format fields AD, DP, GT, GQ, and PL fields. " +
                 "\n" +
                 "Take note that the implementation assumes that reads from the PAR will be mapped to the female chromosome" +
                 "rather than the male. This requires that the PAR in the male chromosome be masked so that the aligner " +
-                "does this. This is normally done for the public releases of the human reference."+
+                "has a single coting to map to. This is normally done for the public releases of the human reference."+
                 "\n" +
                 "Usage example: java -jar picard.jar FindMendelianViolations I=input.vcf \\\n" +
                 "                 TRIO=family.ped \\\n" +
@@ -221,16 +221,18 @@ public class FindMendelianViolations extends CommandLineProgram {
         return 0;
     }
 
-
     private void writeAllViolations(final MendelianViolationDetector.Result result) {
         if (VCF_DIR != null) {
             LOG.info(String.format("Writing family violation VCFs to %s/", VCF_DIR.getAbsolutePath()));
+
             final VariantContextComparator vcComparator = new VariantContextComparator(inputHeader.get().getContigLines());
             final Set<VCFHeaderLine> headerLines = new LinkedHashSet<>(inputHeader.get().getMetaDataInInputOrder());
+
             headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.MENDELIAN_VIOLATION_KEY, 1, VCFHeaderLineType.String, "Type of mendelian violation."));
             headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.ORIGINAL_AC, VCFHeaderLineCount.A, VCFHeaderLineType.Integer, "Original AC"));
             headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.ORIGINAL_AF, VCFHeaderLineCount.A, VCFHeaderLineType.Float, "Original AF"));
             headerLines.add(new VCFInfoHeaderLine(MendelianViolationDetector.ORIGINAL_AN, 1, VCFHeaderLineType.Integer, "Original AN"));
+
             for (final PedFile.PedTrio trio : pedFile.get().values()) {
                 final File outputFile = new File(VCF_DIR, IOUtil.makeFileNameSafe(trio.getFamilyId() + ".vcf"));
                 LOG.info(String.format("Writing %s violation VCF to %s", trio.getFamilyId(), outputFile.getAbsolutePath()));
@@ -242,9 +244,11 @@ public class FindMendelianViolations extends CommandLineProgram {
 
                 final VCFHeader newHeader = new VCFHeader(headerLines, CollectionUtil.makeList(trio.getMaternalId(), trio.getPaternalId(), trio.getIndividualId()));
                 final TreeSet<VariantContext> orderedViolations = new TreeSet<>(vcComparator);
+
                 orderedViolations.addAll(result.violations().get(trio.getFamilyId()));
                 out.writeHeader(newHeader);
                 orderedViolations.forEach(out::add);
+
                 out.close();
             }
         }

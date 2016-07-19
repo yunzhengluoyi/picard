@@ -87,7 +87,7 @@ public class FilterSamReads extends CommandLineProgram {
         includeReadList("OUTPUT SAM/BAM will contain reads that are supplied in the READ_LIST_FILE file"),
         excludeReadList("OUTPUT bam will contain reads that are *not* supplied in the READ_LIST_FILE file"),
     	includeJavascript("OUTPUT bam will contain reads that hava been accepted by the JAVASCRIPT_FILE script."),
-        includeIntervals("OUTPUT SAM/BAM will contain any reads (and their mate) that overlap with an interval. INPUT SAM/BAM and INTERVAL_LIST must be in coordinate SortOrder. Only aligned reads will be output.");
+        includePairedIntervals("OUTPUT SAM/BAM will contain any reads (and their mate) that overlap with an interval. INPUT SAM/BAM and INTERVAL_LIST must be in coordinate SortOrder. Only aligned reads will be output.");
         private final String description;
 
         Filter(final String description) {
@@ -150,6 +150,11 @@ public class FilterSamReads extends CommandLineProgram {
         if (SORT_ORDER != null) {
             fileHeader.setSortOrder(SORT_ORDER);
         }
+
+        if (FILTER == Filter.includePairedIntervals && fileHeader.getSortOrder() != SAMFileHeader.SortOrder.coordinate) {
+            throw new UnsupportedOperationException("Input must be coordinate sorted to use includePairedIntervals");
+        }
+
         final boolean presorted = inputSortOrder.equals(fileHeader.getSortOrder());
         log.info("Filtering [presorted=" + presorted + "] " + INPUT.getName() + " -> OUTPUT=" +
                 OUTPUT.getName() + " [sortorder=" + fileHeader.getSortOrder().name() + "]");
@@ -234,12 +239,12 @@ public class FilterSamReads extends CommandLineProgram {
                 					));
                 	
                     break;
-                case includeIntervals:
+                case includePairedIntervals:
                     filteringIterator = new FilteringSamIterator(samReader.iterator(),
-                            new IntervalFilter(
+                            new IntervalKeepPairFilter(
                                     intervalList,
                                     samReader.getFileHeader()),
-                                    true);
+                                    false);
                     break;
                 default:
                     throw new UnsupportedOperationException(FILTER.name() + " has not been implemented!");
@@ -274,7 +279,7 @@ public class FilterSamReads extends CommandLineProgram {
 
         }
 
-        if (FILTER.equals(Filter.includeIntervals) && INTERVAL_LIST == null) {
+        if (FILTER.equals(Filter.includePairedIntervals) && INTERVAL_LIST == null) {
             return new String[]{"A INTERVAL_LIST must be specified when using the " + FILTER.name() + " option"};
         }
 

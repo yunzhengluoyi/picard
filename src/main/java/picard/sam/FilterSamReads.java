@@ -237,14 +237,10 @@ public class FilterSamReads extends CommandLineProgram {
                 			        JAVASCRIPT_FILE,
                 					samReader.getFileHeader()
                 					));
-                	
                     break;
                 case includePairedIntervals:
                     filteringIterator = new FilteringSamIterator(samReader.iterator(),
-                            new IntervalKeepPairFilter(
-                                    intervalList,
-                                    samReader.getFileHeader()),
-                                    false);
+                            new IntervalKeepPairFilter(intervalList), false);
                     break;
                 default:
                     throw new UnsupportedOperationException(FILTER.name() + " has not been implemented!");

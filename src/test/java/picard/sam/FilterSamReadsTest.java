@@ -90,11 +90,13 @@ public class FilterSamReadsTest extends CommandLineProgramTest {
         final SamReader samReader = SamReaderFactory.makeDefault().open(program.OUTPUT);
         final SAMRecordIterator iter = samReader.iterator();
         int count = 0;
-        while(iter.hasNext()) { iter.next(); ++ count; }
+        while (iter.hasNext()) {
+            iter.next(); ++ count;
+        }
         iter.close();
         samReader.close();
         Assert.assertEquals(count, expectNumber);
-    	}
+    }
 
     @Test(dataProvider = "dataTestPairedIntervalFilter")
     public void testPairedIntervalFilter(final String intervalFilename, final int expectNumber) throws Exception {
@@ -125,7 +127,10 @@ public class FilterSamReadsTest extends CommandLineProgramTest {
         final SamReader samReader = SamReaderFactory.makeDefault().open(program.OUTPUT);
         final SAMRecordIterator iter = samReader.iterator();
         int count = 0;
-        while(iter.hasNext()) { iter.next(); ++ count; }
+        while (iter.hasNext()) {
+            iter.next(); ++ count;
+        }
+
         iter.close();
         samReader.close();
         Assert.assertEquals(count, expectNumber);
